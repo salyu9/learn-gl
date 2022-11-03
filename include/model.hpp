@@ -1,0 +1,221 @@
+﻿#pragma once
+
+#include <utility>
+#include <vector>
+#include <string>
+#include <iostream>
+#include <filesystem>
+#include <algorithm>
+#include <map>
+
+#include <glad/gl.h>
+#include <glm/glm.hpp>
+#include <assimp/Importer.hpp>
+#include <assimp/scene.h>
+#include <assimp/postprocess.h>
+
+#include "utils.hpp"
+#include "glwrap.hpp"
+
+
+namespace glwrap
+{
+    struct vertex final
+    {
+        using vertex_desc_t = std::tuple<glm::vec3, glm::vec3, glm::vec2, glm::vec3, glm::vec3>;
+        glm::vec3 position;
+        glm::vec3 normal;
+        glm::vec2 texcoords;
+        glm::vec3 tangent;
+        glm::vec3 bitangent;
+    };
+
+    namespace details
+    {
+        enum class texture_type
+        {
+            diffuse,
+            specular,
+        };
+
+        inline std::string to_string(texture_type type)
+        {
+            switch (type)
+            {
+            case texture_type::diffuse:
+                return "diffuse";
+            case texture_type::specular:
+                return "specular";
+            default:
+                return "unknown";
+            }
+        }
+
+        /*struct texture_entry
+        {
+            std::reference_wrapper<texture2d> texture_ref;
+            texture_type type;
+        };*/
+
+        struct mesh final
+        {
+            mesh(
+                std::string name,
+                std::vector<vertex> const &vertices,
+                std::vector<uint32_t> const &indices,
+                std::vector<uint32_t> diffuse_indices,
+                std::vector<uint32_t> specular_indices) : name(std::move(name)),
+                                                          vbuffer(vertices),
+                                                          ibuffer(indices),
+                                                          varray(auto_vertex_array(ibuffer, vbuffer)),
+                                                          diffuse_indices(std::move(diffuse_indices)),
+                                                          specular_indices(std::move(specular_indices))
+            {
+            }
+
+            void draw()
+            {
+                varray.bind();
+                varray.draw(draw_mode::triangles);
+            }
+
+            std::string name;
+            vertex_buffer<vertex> vbuffer;
+            index_buffer<uint32_t> ibuffer;
+            vertex_array varray;
+
+            std::vector<uint32_t> diffuse_indices;
+            std::vector<uint32_t> specular_indices;
+        };
+
+        inline glm::vec2 to_vec2(aiVector2D const &vec)
+        {
+            return {vec.x, vec.y};
+        }
+        inline glm::vec3 to_vec3(aiVector3D const &vec)
+        {
+            return {vec.x, vec.y, vec.z};
+        }
+
+    }
+
+    class model final
+    {
+    public:
+        static model load_file(std::filesystem::path const &path)
+        {
+            Assimp::Importer importer;
+            auto ai_scene = importer.ReadFile(path.string(), aiProcess_Triangulate | aiProcess_FlipUVs | aiProcess_CalcTangentSpace);
+            if (!ai_scene || ai_scene->mFlags & AI_SCENE_FLAGS_INCOMPLETE || !ai_scene->mRootNode)
+            {
+                throw std::invalid_argument(std::string("Load model failed: ") + importer.GetErrorString());
+            }
+
+            model m{};
+            m.directory_ = path.parent_path();
+            m.import_node(ai_scene->mRootNode, ai_scene);
+            return m;
+        }
+
+        void import_node(aiNode const *ai_node, aiScene const *ai_scene)
+        {
+            for (auto mesh_index : utils::ptr_range(ai_node->mMeshes, ai_node->mNumMeshes))
+            {
+                import_mesh(ai_scene->mMeshes[mesh_index], ai_scene);
+            }
+            for (auto *child : utils::ptr_range(ai_node->mChildren, ai_node->mNumChildren))
+            {
+                import_node(child, ai_scene);
+            }
+        }
+
+        void import_mesh(aiMesh const *ai_mesh, aiScene const *ai_scene)
+        {
+            std::vector<vertex> vertices;
+            std::vector<uint32_t> indices;
+
+            for (auto i : utils::range(ai_mesh->mNumVertices))
+            {
+                auto position = details::to_vec3(ai_mesh->mVertices[i]);
+                auto normal = details::to_vec3(ai_mesh->mNormals[i]);
+                auto texcoords = ai_mesh->mTextureCoords[0]
+                                     ? details::to_vec3(ai_mesh->mTextureCoords[0][i])
+                                     : glm::vec2(0.0f, 0.0f);
+
+                auto tangent = details::to_vec3(ai_mesh->mTangents[i]);
+                auto bitangent = details::to_vec3(ai_mesh->mBitangents[i]);
+
+                vertices.push_back({position, normal, texcoords, tangent, bitangent});
+            }
+            for (auto &&face : utils::ptr_range(ai_mesh->mFaces, ai_mesh->mNumFaces))
+            {
+                std::copy(face.mIndices, face.mIndices + face.mNumIndices, std::back_inserter(indices));
+            }
+
+            auto ai_material = ai_scene->mMaterials[ai_mesh->mMaterialIndex];
+            auto diffuse_maps = load_textures(ai_material, aiTextureType_DIFFUSE, details::texture_type::diffuse);
+            // textures.insert(textures.end(), diffuseMaps.begin(), diffuseMaps.end());
+            auto specular_maps = load_textures(ai_material, aiTextureType_SPECULAR, details::texture_type::specular);
+            // textures.insert(textures.end(), specularMaps.begin(), specularMaps.end());
+            // auto normalMaps = load_textures(ai_material, aiTextureType_HEIGHT, "texture_normal");
+            // textures.insert(textures.end(), normalMaps.begin(), normalMaps.end());
+            // auto heightMaps = load_textures(ai_material, aiTextureType_AMBIENT, "texture_height");
+            // textures.insert(textures.end(), heightMaps.begin(), heightMaps.end());
+
+            meshes_.emplace_back(ai_mesh->mName.C_Str(), std::move(vertices), std::move(indices), std::move(diffuse_maps), std::move(specular_maps));
+        }
+
+        std::vector<uint32_t> load_textures(aiMaterial *ai_material, aiTextureType ai_tex_type, details::texture_type tex_type)
+        {
+            std::vector<uint32_t> result{};
+            for (auto i : utils::range(ai_material->GetTextureCount(ai_tex_type)))
+            {
+                aiString str;
+                ai_material->GetTexture(ai_tex_type, i, &str);
+
+                // find texture in loaded
+                std::string path(str.C_Str());
+                auto iter = texture_map_.find(path);
+
+                if (iter == texture_map_.end())
+                {
+                    auto new_index = static_cast<uint32_t>(textures_.size());
+                    texture_map_.emplace(path, new_index);
+                    result.push_back(new_index);
+                    textures_.emplace_back((directory_ / path).string());
+                }
+                else
+                {
+                    result.push_back(iter->second);
+                }
+            }
+            return result;
+        }
+
+        void draw(glm::mat4 const &projection, glm::mat4 const &model_view)
+        {
+            program_.use();
+            program_.uniform("projection").set_mat4(projection);
+            program_.uniform("modelView").set_mat4(model_view);
+            for (auto &mesh : meshes_)
+            {
+                mesh.varray.bind();
+                if (!mesh.diffuse_indices.empty())
+                {
+                    auto &texture = textures_[mesh.diffuse_indices.front()];
+                    texture.bind_unit(0);
+                    program_.uniform("textureDiffuse0").set_int(0);
+                }
+                mesh.varray.draw(draw_mode::triangles);
+            }
+        }
+
+    private:
+        std::filesystem::path directory_;
+        std::vector<details::mesh> meshes_;
+        std::vector<texture2d> textures_;
+        std::map<std::string, uint32_t> texture_map_;
+
+        shader_program program_{shader::compile_file("shaders/straight_vs.glsl", shader_type::vertex), shader::compile_file("shaders/straight_fs.glsl", shader_type::fragment)};
+    };
+}
