@@ -53,7 +53,7 @@ FetchContent_MakeAvailable(assimp)
 file(GLOB_RECURSE include CONFIGURE_DEPENDS "include/*")
 file(GLOB_RECURSE src CONFIGURE_DEPENDS "src/*")
 
-source_group(TREE "${CMAKE_CURRENT_SOURCE_DIR}/base/dir" PREFIX "Header Files" FILES ${FILE_LIST})
+# source_group(TREE "${CMAKE_CURRENT_SOURCE_DIR}/base/dir" PREFIX "Header Files" FILES ${FILE_LIST})
 
 add_executable(learn-gl "${src}" "external/glad/src/gl.c" "${include}")
 target_include_directories(learn-gl PRIVATE include external/stb external/glad/include)
@@ -61,5 +61,15 @@ target_link_libraries(learn-gl glm glfw assimp)
 
 target_compile_features(learn-gl PUBLIC cxx_std_20)
 set_target_properties(learn-gl PROPERTIES CXX_EXTENSIONS OFF)
+if (MSVC)
+    target_compile_options(learn-gl PRIVATE
+        "/Zc:__cplusplus"
+        "/Zc:throwingNew"
+        "/Zc:externConstexpr" )
+endif()
 
-#file(COPY shaders    DESTINATION "${CMAKE_CURRENT_BINARY_DIR}/shaders")
+install(TARGETS learn-gl assimp glfw
+    RUNTIME DESTINATION bin)
+install(DIRECTORY "shaders" "resources"
+    DESTINATION bin)
+
