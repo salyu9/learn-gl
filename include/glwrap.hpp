@@ -292,7 +292,7 @@ namespace glwrap
         template <typename... Vertex>
         explicit vertex_array(vertex_buffer<Vertex> &...buffers) : vertex_array()
         {
-            (void)std::initializer_list<int>{(this->attach_vbuffer(buffers), 0)...};
+            (this->attach_vbuffer(buffers), ...);
         }
 
         template <typename Index, typename... Vertex>
@@ -771,7 +771,7 @@ namespace glwrap
         template <typename... T>
         void attach_multiple(T &&...s)
         {
-            (void)std::initializer_list<int>{(this->attach(std::forward<T>(s)), 0)...};
+            (this->attach(std::forward<T>(s)), ...);
         }
 
         std::vector<shader> shaders_;
