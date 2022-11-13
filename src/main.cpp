@@ -314,6 +314,9 @@ int main()
         auto m = utils::benchmark([]
                                   { return model::load_file("resources/models/crysis_nano_suit_2/scene.gltf"); },
                                   "load model: ");
+        // auto m = utils::benchmark([]
+        //                           { return model::load_file("resources/models/survival_guitar_backpack.glb"); },
+        //                           "load model: ");
 
         while (!glfwWindowShouldClose(window))
         {

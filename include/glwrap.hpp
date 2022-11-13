@@ -809,6 +809,53 @@ namespace glwrap
             }
         }
 
+        explicit texture2d(void const * p, size_t size, texture2d_format format = texture2d_format::unspecified)
+        {
+            auto required_channel = bitmap_channel::unspecified;
+            if (format == texture2d_format::rgb)
+                required_channel = bitmap_channel::rgb;
+            else if (format == texture2d_format::rgba)
+                required_channel = bitmap_channel::rgba;
+            auto bmp = bitmap::from_memory(p, size, required_channel, true);
+            if (format == texture2d_format::unspecified)
+            {
+                if (bmp.channels() == bitmap_channel::rgb)
+                    format = texture2d_format::rgb;
+                else if (bmp.channels() == bitmap_channel::rgba)
+                    format = texture2d_format::rgba;
+                else
+                    throw std::invalid_argument("bitmap from memory has " + to_string(bmp.channels()) + "channels, unknown format");
+            }
+            else
+            {
+                if (format == texture2d_format::rgb && bmp.channels() != bitmap_channel::rgb)
+                {
+                    throw std::invalid_argument("bitmap from memory has " + to_string(bmp.channels()) + "channels, 3 needed");
+                }
+                if (format == texture2d_format::rgba && bmp.channels() != bitmap_channel::rgba)
+                {
+                    throw std::invalid_argument("bitmap from memory has " + to_string(bmp.channels()) + "channels, 4 needed");
+                }
+            }
+
+            glCreateTextures(GL_TEXTURE_2D, 1, &handle_);
+            glTextureParameteri(handle_, GL_TEXTURE_MIN_FILTER, GL_LINEAR_MIPMAP_LINEAR);
+            glTextureParameteri(handle_, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+
+            GLenum internal_format = format == texture2d_format::rgb ? GL_RGB8 : GL_RGBA8;
+
+            glTextureStorage2D(handle_, bmp.max_mipmap_level(), internal_format, bmp.width(), bmp.height());
+            if (bmp.is_16bit())
+            {
+                glTextureSubImage2D(handle_, 0, 0, 0, bmp.width(), bmp.height(), static_cast<GLenum>(format), GL_UNSIGNED_SHORT, bmp.pixels_16bit().data());
+            }
+            else
+            {
+                glTextureSubImage2D(handle_, 0, 0, 0, bmp.width(), bmp.height(), static_cast<GLenum>(format), GL_UNSIGNED_BYTE, bmp.pixels().data());
+            }
+            glGenerateTextureMipmap(handle_);
+        }
+
         explicit texture2d(std::string const &filename, texture2d_format format = texture2d_format::unspecified)
         {
             auto required_channel = bitmap_channel::unspecified;

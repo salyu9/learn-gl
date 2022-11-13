@@ -20,18 +20,18 @@ namespace camera_movement
     };
 }
 // Default camera values
-const constexpr float default_yaw = -90.0f;
+constexpr float default_yaw = -90.0f;
 
-const constexpr float default_pitch = 0.0f;
-const constexpr float pitch_limit = 89.0f;
+constexpr float default_pitch = 0.0f;
+constexpr float pitch_limit = 89.0f;
 
-const constexpr float default_speed = 2.5f;
-const constexpr float default_sensitivity = 0.05f;
-const constexpr float default_zoom = 45.0f;
-const constexpr float min_zoom = 1.0f;
-const constexpr float max_zoom = 45.0f;
-const constexpr float default_near_z = 0.1f;
-const constexpr float default_far_z = 100.0f;
+constexpr float default_speed = 2.5f;
+constexpr float default_sensitivity = 0.05f;
+constexpr float default_zoom = 45.0f;
+constexpr float min_zoom = 1.0f;
+constexpr float max_zoom = 45.0f;
+constexpr float default_near_z = 0.1f;
+constexpr float default_far_z = 100.0f;
 
 class camera
 {

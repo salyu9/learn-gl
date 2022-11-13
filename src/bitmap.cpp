@@ -13,6 +13,32 @@
 #define STB_IMAGE_IMPLEMENTATION
 #include <stb_image.h>
 
+bitmap bitmap::from_memory(void const * p, size_t size, bitmap_channel required_channels, bool flip_vertically)
+{
+    int width, height, channels;
+    stbi_set_flip_vertically_on_load(flip_vertically);
+    auto puc = static_cast<stbi_uc const*>(p);
+    auto len = static_cast<int>(size);
+    if (stbi_is_16_bit_from_memory(puc, len))
+    {
+        auto raw_data = stbi_load_16_from_memory(puc, len, &width, &height, &channels, static_cast<int>(required_channels));
+        if (raw_data == nullptr)
+            throw std::invalid_argument("bitmap from memory load failed");
+        std::vector<std::uint16_t> pixels(raw_data, raw_data + width * height * channels);
+        stbi_image_free(raw_data);
+        return bitmap(width, height, channels, std::move(pixels));
+    }
+    else
+    {
+        auto raw_data = stbi_load_from_memory(puc, len, &width, &height, &channels, static_cast<int>(required_channels));
+        if (raw_data == nullptr)
+            throw std::invalid_argument("bitmap from memory load failed");
+        std::vector<std::uint8_t> pixels(raw_data, raw_data + width * height * channels);
+        stbi_image_free(raw_data);
+        return bitmap(width, height, channels, std::move(pixels));
+    }
+}
+
 bitmap bitmap::from_file(const char *filename, bitmap_channel required_channels, bool flip_vertically)
 {
     int width, height, channels;

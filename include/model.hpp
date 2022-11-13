@@ -153,9 +153,9 @@ namespace glwrap
             }
 
             auto ai_material = ai_scene->mMaterials[ai_mesh->mMaterialIndex];
-            auto diffuse_maps = load_textures(ai_material, aiTextureType_DIFFUSE, details::texture_type::diffuse);
+            auto diffuse_maps = load_textures(ai_material, aiTextureType_DIFFUSE, details::texture_type::diffuse, ai_scene);
             // textures.insert(textures.end(), diffuseMaps.begin(), diffuseMaps.end());
-            auto specular_maps = load_textures(ai_material, aiTextureType_SPECULAR, details::texture_type::specular);
+            auto specular_maps = load_textures(ai_material, aiTextureType_SPECULAR, details::texture_type::specular, ai_scene);
             // textures.insert(textures.end(), specularMaps.begin(), specularMaps.end());
             // auto normalMaps = load_textures(ai_material, aiTextureType_HEIGHT, "texture_normal");
             // textures.insert(textures.end(), normalMaps.begin(), normalMaps.end());
@@ -165,7 +165,7 @@ namespace glwrap
             meshes_.emplace_back(ai_mesh->mName.C_Str(), std::move(vertices), std::move(indices), std::move(diffuse_maps), std::move(specular_maps));
         }
 
-        std::vector<uint32_t> load_textures(aiMaterial *ai_material, aiTextureType ai_tex_type, details::texture_type tex_type)
+        std::vector<uint32_t> load_textures(aiMaterial *ai_material, aiTextureType ai_tex_type, details::texture_type tex_type, aiScene const* ai_scene)
         {
             std::vector<uint32_t> result{};
             for (auto i : utils::range(ai_material->GetTextureCount(ai_tex_type)))
@@ -182,7 +182,15 @@ namespace glwrap
                     auto new_index = static_cast<uint32_t>(textures_.size());
                     texture_map_.emplace(path, new_index);
                     result.push_back(new_index);
-                    textures_.emplace_back((directory_ / path).string());
+                    if (auto texture = ai_scene->GetEmbeddedTexture(str.C_Str())) {
+                        if (texture->mHeight != 0) {
+                            throw std::runtime_error("Cannot load embeded texture");
+                        }
+                        textures_.emplace_back(texture->pcData, texture->mWidth);
+                    }
+                    else {
+                        textures_.emplace_back((directory_ / path).string());
+                    }
                 }
                 else
                 {
