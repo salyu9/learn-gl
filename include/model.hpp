@@ -25,7 +25,7 @@ namespace glwrap
         void draw(glm::mat4 const &projection, glm::mat4 const &model_view);
     private:
         model();
-        friend class model_impl;
+        class model_impl;
         std::shared_ptr<model_impl> impl_;
     };
 }

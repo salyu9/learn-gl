@@ -25,7 +25,7 @@ constexpr float default_yaw = -90.0f;
 constexpr float default_pitch = 0.0f;
 constexpr float pitch_limit = 89.0f;
 
-constexpr float default_speed = 2.5f;
+constexpr float default_speed = 8.0f;
 constexpr float default_sensitivity = 0.05f;
 constexpr float default_zoom = 45.0f;
 constexpr float min_zoom = 1.0f;
@@ -70,9 +70,9 @@ public:
     }
 
     // Processes input received from any keyboard-like input system. Accepts input parameter in the form of camera defined ENUM (to abstract it from windowing systems)
-    void process_keyboard(camera_movement::camera_movement direction, float delta_time) noexcept
+    void process_keyboard(camera_movement::camera_movement direction, float delta_time, float speed_multiplier = 1) noexcept
     {
-        float velocity = movement_speed_ * delta_time;
+        float velocity = movement_speed_ * delta_time * speed_multiplier;
         if (direction & camera_movement::forward)
             position_ += front_ * velocity;
         if (direction & camera_movement::backward)

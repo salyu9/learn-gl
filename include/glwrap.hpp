@@ -684,7 +684,7 @@ namespace glwrap
 
     private:
         friend class shader_program;
-        shader_uniform(GLuint program_handle, std::string const &name, bool throw_if_not_found)
+        shader_uniform(GLuint program_handle, std::string_view name, bool throw_if_not_found)
             : program_handle_(program_handle),
               location_(glGetUniformLocation(program_handle, name.data()))
         {
@@ -749,7 +749,7 @@ namespace glwrap
             std::swap(ref_shaders_, other.ref_shaders_);
         }
 
-        shader_uniform uniform(std::string const &name, bool throw_if_not_found = false) const
+        shader_uniform uniform(std::string_view name, bool throw_if_not_found = false) const
         {
             return shader_uniform(handle_, name, throw_if_not_found);
         }

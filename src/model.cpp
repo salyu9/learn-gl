@@ -1,6 +1,7 @@
 ﻿#include <iostream>
 #include <map>
 #include <vector>
+#include <cmath>
 
 #include "assimp/Importer.hpp"
 #include "assimp/scene.h"
@@ -72,14 +73,23 @@ namespace glwrap
         return {vec.x, vec.y, vec.z};
     }
 
-    struct model_impl final
+    struct model::model_impl final
     {
         std::filesystem::path directory_;
         std::vector<mesh> meshes_;
         std::vector<texture2d> textures_;
         std::map<std::string, uint32_t> texture_map_;
 
-        shader_program program_{shader::compile_file("shaders/straight_vs.glsl", shader_type::vertex), shader::compile_file("shaders/straight_fs.glsl", shader_type::fragment)};
+        shader_program program_{
+            shader::compile_file("shaders/straight_vs.glsl", shader_type::vertex),
+            shader::compile_file("shaders/straight_fs.glsl", shader_type::fragment),
+        };
+
+        // shader_program program_{
+        //     shader::compile_file("shaders/geometry/explode_vs.glsl", shader_type::vertex),
+        //     shader::compile_file("shaders/geometry/explode_fs.glsl", shader_type::fragment),
+        //     shader::compile_file("shaders/geometry/explode_gs.glsl", shader_type::geometry)
+        // };
 
         void load_file(std::filesystem::path const &path)
         {
@@ -184,6 +194,12 @@ namespace glwrap
             program_.use();
             program_.uniform("projection").set_mat4(projection);
             program_.uniform("modelView").set_mat4(model_view);
+
+            // program_.uniform("explodeDistance").set_float(2);
+            // auto time_ratio = std::fmod(timer::time(), 3.0f) / 3.0f;
+            // auto ratio = std::sqrt(time_ratio);
+            // program_.uniform("explodeRatio").set_float(ratio);
+
             for (auto &mesh : meshes_)
             {
                 mesh.varray.bind();

@@ -37,36 +37,6 @@ void reset_frame_buffer()
 
 // ------------------------------
 
-namespace timer
-{
-    namespace details
-    {
-        inline auto startup_tp = std::chrono::high_resolution_clock::now();
-        inline auto get_time()
-        {
-            auto now = std::chrono::high_resolution_clock::now();
-            auto duration = std::chrono::duration_cast<std::chrono::duration<float>>(now - startup_tp);
-            return duration.count();
-        };
-        inline float current_time = get_time();
-        inline float delta_time = 0.0f;
-    }
-    inline auto time()
-    {
-        return details::current_time;
-    }
-    inline auto delta_time()
-    {
-        return details::delta_time;
-    }
-    inline void update()
-    {
-        auto new_time = details::get_time();
-        details::delta_time = new_time - details::current_time;
-        details::current_time = new_time;
-    }
-}
-
 namespace input_status
 {
     inline struct
@@ -126,21 +96,24 @@ void key_callback(GLFWwindow *window, int key, int scancode, int action, int mod
 
 void process_input(GLFWwindow *window)
 {
-    if (glfwGetKey(window, GLFW_KEY_ESCAPE) == GLFW_PRESS)
+    if (glfwGetKey(window, GLFW_KEY_ESCAPE) == GLFW_PRESS) {
         glfwSetWindowShouldClose(window, true);
+    }
+
+    auto multiplier = glfwGetKey(window, GLFW_KEY_LEFT_SHIFT) == GLFW_PRESS ? 5.0f : 1.0f;
 
     for (auto [key, movement] : {
              std::pair(GLFW_KEY_W, camera_movement::forward),
              std::pair(GLFW_KEY_S, camera_movement::backward),
              std::pair(GLFW_KEY_A, camera_movement::left),
              std::pair(GLFW_KEY_D, camera_movement::right),
-             std::pair(GLFW_KEY_C, camera_movement::down),
-             std::pair(GLFW_KEY_Z, camera_movement::up),
+             std::pair(GLFW_KEY_Q, camera_movement::down),
+             std::pair(GLFW_KEY_E, camera_movement::up),
          })
     {
         if (glfwGetKey(window, key) == GLFW_PRESS)
         {
-            main_camera.process_keyboard(movement, timer::delta_time());
+            main_camera.process_keyboard(movement, timer::delta_time(), multiplier);
         }
     }
 }

@@ -139,3 +139,33 @@ namespace utils
     }
 
 }
+
+namespace timer
+{
+    namespace details
+    {
+        inline auto startup_tp = std::chrono::high_resolution_clock::now();
+        inline auto get_time()
+        {
+            auto now = std::chrono::high_resolution_clock::now();
+            auto duration = std::chrono::duration_cast<std::chrono::duration<float>>(now - startup_tp);
+            return duration.count();
+        };
+        inline float current_time = get_time();
+        inline float delta_time = 0.0f;
+    }
+    inline auto time()
+    {
+        return details::current_time;
+    }
+    inline auto delta_time()
+    {
+        return details::delta_time;
+    }
+    inline void update()
+    {
+        auto new_time = details::get_time();
+        details::delta_time = new_time - details::current_time;
+        details::current_time = new_time;
+    }
+}
