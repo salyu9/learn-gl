@@ -335,6 +335,11 @@ namespace glwrap
             glVertexArrayAttribBinding(handle_, attrib_index, vbuffer_index);
         }
 
+        void binding_divisor(GLuint vbuffer_index, GLuint divisor)
+        {
+            glVertexArrayBindingDivisor(handle_, vbuffer_index, divisor);
+        }
+
         void enable_attrib(GLuint index)
         {
             glEnableVertexArrayAttrib(handle_, index);
@@ -373,20 +378,40 @@ namespace glwrap
             }
         }
 
+        void draw_instanced(draw_mode mode, GLsizei instance_count)
+        {
+            draw_instanced(mode, 0, count_, instance_count);
+        }
+
+        void draw_instanced(draw_mode mode, GLint start, GLsizei count, GLsizei instance_count)
+        {
+            if (ibuffer_.has_value())
+            {
+                intptr_t indices = start * index_size_;
+                glDrawElementsInstanced(static_cast<GLenum>(mode), count, index_type_, reinterpret_cast<const void *>(indices), instance_count);
+            }
+            else
+            {
+                glDrawArraysInstanced(static_cast<GLenum>(mode), start, count, instance_count);
+            }
+        }
+
         GLuint handle() const noexcept { return handle_; }
+
+        template <typename Vertex>
+        size_t attach_vbuffer(vertex_buffer<Vertex> &vbuffer)
+        {
+            auto index = vbuffers_.size();
+            count_ = std::min(count_, vbuffer.size());
+            ::glVertexArrayVertexBuffer(this->handle_, static_cast<GLuint>(index), vbuffer.handle(), 0, sizeof(Vertex));
+            vbuffers_.push_back(vbuffer.handle());
+            return index;
+        }
 
     private:
         vertex_array()
         {
             ::glCreateVertexArrays(1, &handle_);
-        }
-
-        template <typename Vertex>
-        void attach_vbuffer(vertex_buffer<Vertex> &vbuffer)
-        {
-            count_ = std::min(count_, vbuffer.size());
-            ::glVertexArrayVertexBuffer(this->handle_, static_cast<GLuint>(vbuffers_.size()), vbuffer.handle(), 0, sizeof(Vertex));
-            vbuffers_.push_back(vbuffer.handle());
         }
 
         template <typename Index>
@@ -462,6 +487,7 @@ namespace glwrap
         };
 
         inline int tuple_attrib_format_iter(vertex_array &, int attrib_index, int, int) { return attrib_index; }
+
         template <typename T, typename... Rest>
         int tuple_attrib_format_iter(vertex_array &varray, int attrib_index, int buffer_index, int offset, attrib_format_helper<T> helper, Rest &&...rest)
         {
@@ -749,7 +775,7 @@ namespace glwrap
             std::swap(ref_shaders_, other.ref_shaders_);
         }
 
-        shader_uniform uniform(std::string_view name, bool throw_if_not_found = false) const
+        shader_uniform uniform(std::string_view name, bool throw_if_not_found = true) const
         {
             return shader_uniform(handle_, name, throw_if_not_found);
         }
@@ -955,13 +981,14 @@ namespace glwrap
     class cubemap final
     {
     public:
+        using path = std::filesystem::path;
         cubemap(
-            std::string const &right,
-            std::string const &left,
-            std::string const &top,
-            std::string const &bottom,
-            std::string const &back,
-            std::string const &front)
+            path const &right,
+            path const &left,
+            path const &top,
+            path const &bottom,
+            path const &back,
+            path const &front)
         {
             std::tuple<bitmap, GLenum, GLsizei> faces[] = {
                 {bitmap::from_file(right, bitmap_channel::rgb), GL_TEXTURE_CUBE_MAP_POSITIVE_X, 0},
@@ -996,11 +1023,43 @@ namespace glwrap
             glTextureParameteri(handle_, GL_TEXTURE_CUBE_MAP_SEAMLESS, GL_TRUE);
         }
 
+        explicit cubemap(path const &folder, std::string const& file_ext)
+         : cubemap(folder / ("right" + file_ext),
+                   folder / ("left" + file_ext),
+                   folder / ("top" + file_ext),
+                   folder / ("bottom" + file_ext),
+                   folder / ("front" + file_ext),
+                   folder / ("back" + file_ext))
+        { }
+
+        cubemap(cubemap&& other) noexcept
+        {
+            this->swap(other);
+        }
+
+        ~cubemap()
+        {
+            if (handle_ != 0)
+            {
+                glDeleteTextures(1, &handle_);
+            }
+        }
+
+        cubemap& operator= (cubemap&& other) noexcept
+        {
+            this->swap(other);
+            return *this;
+        }
+
         void bind() { glBindTexture(GL_TEXTURE_CUBE_MAP, handle_); }
 
         void bind_unit(GLuint unit) { glBindTextureUnit(unit, handle_); }
 
         GLuint handle() { return handle_; }
+
+        void swap(cubemap & other) {
+            std::swap(handle_, other.handle_);
+        }
 
     private:
         GLuint handle_{0};

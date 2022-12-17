@@ -3,7 +3,6 @@
 #include <chrono>
 #include <optional>
 #include <queue>
-
 #include <format>
 
 #include "glad/gl.h"
@@ -16,6 +15,8 @@
 #include "camera.hpp"
 #include "model.hpp"
 #include "utils.hpp"
+#include "skybox.hpp"
+#include "examples.hpp"
 
 using namespace glwrap;
 
@@ -46,9 +47,11 @@ namespace input_status
         double delta_x = 0;
         double delta_y = 0;
     } cursor;
+
+    inline bool wondering;
 }
 
-camera main_camera(glm::vec3(-5.0f, 15.0f, 10.0f), glm::vec3(0, 1, 0), -60, -10);
+camera main_camera;
 
 void framebuffer_size_callback(GLFWwindow *window, int width, int height)
 {
@@ -96,7 +99,8 @@ void key_callback(GLFWwindow *window, int key, int scancode, int action, int mod
 
 void process_input(GLFWwindow *window)
 {
-    if (glfwGetKey(window, GLFW_KEY_ESCAPE) == GLFW_PRESS) {
+    if (glfwGetKey(window, GLFW_KEY_ESCAPE) == GLFW_PRESS)
+    {
         glfwSetWindowShouldClose(window, true);
     }
 
@@ -118,14 +122,39 @@ void process_input(GLFWwindow *window)
     }
 }
 
-void mouse_callback(GLFWwindow *window, double x, double y)
+void cursor_pos_callback(GLFWwindow *window, double x, double y)
 {
     using namespace input_status;
+    if (!wondering) {
+        return;
+    }
     cursor.delta_x = x - cursor.x;
     cursor.delta_y = y - cursor.y;
     cursor.x = x;
     cursor.y = y;
     main_camera.process_mouse_movement(static_cast<float>(cursor.delta_x), -static_cast<float>(cursor.delta_y));
+}
+
+void mouse_button_callback(GLFWwindow *window, int button, int action, int mods)
+{
+    if (button == GLFW_MOUSE_BUTTON_RIGHT)
+    {
+        if (action == GLFW_PRESS)
+        {
+            double x, y;
+            glfwGetCursorPos(window, &x, &y);
+            input_status::cursor.x = x;
+            input_status::cursor.y = y;
+            glfwSetInputMode(window, GLFW_CURSOR, GLFW_CURSOR_HIDDEN);
+            input_status::wondering = true;
+        }
+        else if (action == GLFW_RELEASE)
+        {
+            glfwSetInputMode(window, GLFW_CURSOR, GLFW_CURSOR_NORMAL);
+            input_status::wondering = false;
+        }
+    }
+    
 }
 
 void scroll_callback(GLFWwindow *window, double xoffset, double yoffset)
@@ -148,10 +177,29 @@ void GLAPIENTRY message_callback(GLenum source,
     {
         std::cerr << std::format("GL Error: type = 0x{:x}, severity = 0x{:x}, message = {}", type, severity, message) << std::endl;
     }
+    else if (severity != GL_DEBUG_SEVERITY_NOTIFICATION)
+    {
+        std::cout << std::format("GL Info: type = 0x{:x}, severity = 0x{:x}, message = {}", type, severity, message) << std::endl;
+    }
 }
 
 int main()
 {
+    auto examples = get_examples();
+    std::cout << "Examples:" << std::endl;
+    auto i = 0;
+    for (auto & [name, _] : examples) {
+        std::cout << "    " << (++i) << ": " << name << std::endl;
+    }
+    std::cout << "Select [1~" << examples.size() << "]:" << std::flush;
+    size_t in;
+    if (!(std::cin >> in) || in == 0 || in > examples.size())
+    {
+        std::cout << "Invalid input" << std::endl;
+        return EXIT_FAILURE;
+    }
+    auto [example_name, example_creator] = examples[in - 1U];
+
     if (glfwInit() != GLFW_TRUE)
     {
         std::cout << "glfwInit() failed." << std::endl;
@@ -184,9 +232,9 @@ int main()
     glfwSetFramebufferSizeCallback(window, framebuffer_size_callback);
     framebuffer_size_callback(window, init_width, init_height);
     glfwSetKeyCallback(window, key_callback);
-    glfwSetCursorPosCallback(window, mouse_callback);
+    glfwSetCursorPosCallback(window, cursor_pos_callback);
+    glfwSetMouseButtonCallback(window, mouse_button_callback);
     glfwSetScrollCallback(window, scroll_callback);
-    glfwSetInputMode(window, GLFW_CURSOR, GLFW_CURSOR_DISABLED);
     glfwGetCursorPos(window, &input_status::cursor.x, &input_status::cursor.y);
 
     // During init, enable debug output
@@ -199,6 +247,8 @@ int main()
 
     try
     {
+        auto example = example_creator();
+
         // frame buffer
         struct quad_vertex_t
         {
@@ -217,79 +267,16 @@ int main()
         };
         auto quad_varray = auto_vertex_array(quad_vbuffer);
         auto quad_program = shader_program(
-            shader::compile_file("shaders/fbuffer_vs.glsl", shader_type::vertex),
-            shader::compile_file("shaders/fbuffer_fs.glsl", shader_type::fragment));
+            shader::compile_file("shaders/base/fbuffer_vs.glsl", shader_type::vertex),
+            shader::compile_file("shaders/base/fbuffer_fs.glsl", shader_type::fragment));
         quad_program.uniform("screenTexture").set_int(0);
 
-        // skybox
-        auto skybox_vertices = vertex_buffer<glm::vec3>{
-            // positions
-            glm::vec3(-1.0f, 1.0f, -1.0f),
-            glm::vec3(-1.0f, -1.0f, -1.0f),
-            glm::vec3(1.0f, -1.0f, -1.0f),
-            glm::vec3(1.0f, -1.0f, -1.0f),
-            glm::vec3(1.0f, 1.0f, -1.0f),
-            glm::vec3(-1.0f, 1.0f, -1.0f),
+        example->init();
 
-            glm::vec3(-1.0f, -1.0f, 1.0f),
-            glm::vec3(-1.0f, -1.0f, -1.0f),
-            glm::vec3(-1.0f, 1.0f, -1.0f),
-            glm::vec3(-1.0f, 1.0f, -1.0f),
-            glm::vec3(-1.0f, 1.0f, 1.0f),
-            glm::vec3(-1.0f, -1.0f, 1.0f),
-
-            glm::vec3(1.0f, -1.0f, -1.0f),
-            glm::vec3(1.0f, -1.0f, 1.0f),
-            glm::vec3(1.0f, 1.0f, 1.0f),
-            glm::vec3(1.0f, 1.0f, 1.0f),
-            glm::vec3(1.0f, 1.0f, -1.0f),
-            glm::vec3(1.0f, -1.0f, -1.0f),
-
-            glm::vec3(-1.0f, -1.0f, 1.0f),
-            glm::vec3(-1.0f, 1.0f, 1.0f),
-            glm::vec3(1.0f, 1.0f, 1.0f),
-            glm::vec3(1.0f, 1.0f, 1.0f),
-            glm::vec3(1.0f, -1.0f, 1.0f),
-            glm::vec3(-1.0f, -1.0f, 1.0f),
-
-            glm::vec3(-1.0f, 1.0f, -1.0f),
-            glm::vec3(1.0f, 1.0f, -1.0f),
-            glm::vec3(1.0f, 1.0f, 1.0f),
-            glm::vec3(1.0f, 1.0f, 1.0f),
-            glm::vec3(-1.0f, 1.0f, 1.0f),
-            glm::vec3(-1.0f, 1.0f, -1.0f),
-
-            glm::vec3(-1.0f, -1.0f, -1.0f),
-            glm::vec3(-1.0f, -1.0f, 1.0f),
-            glm::vec3(1.0f, -1.0f, -1.0f),
-            glm::vec3(1.0f, -1.0f, -1.0f),
-            glm::vec3(-1.0f, -1.0f, 1.0f),
-            glm::vec3(1.0f, -1.0f, 1.0f),
-        };
-        auto skybox_varray = auto_vertex_array(skybox_vertices);
-        auto skybox_cubemap = cubemap(
-            "resources/cubemaps/skybox/right.jpg",
-            "resources/cubemaps/skybox/left.jpg",
-            "resources/cubemaps/skybox/top.jpg",
-            "resources/cubemaps/skybox/bottom.jpg",
-            "resources/cubemaps/skybox/front.jpg",
-            "resources/cubemaps/skybox/back.jpg");
-        auto skybox_program = shader_program(
-            shader::compile_file("shaders/skybox_vs.glsl", shader_type::vertex),
-            shader::compile_file("shaders/skybox_fs.glsl", shader_type::fragment));
-        auto skybox_proj_uniform = skybox_program.uniform("projection");
-        auto skybox_view_uniform = skybox_program.uniform("view");
-        skybox_program.uniform("skybox").set_int(0);
-
-        // object
-
-        auto model_trans = glm::mat4(1.0f);
-        auto m = utils::benchmark([]
-                                  { return model::load_file("resources/models/crysis_nano_suit_2/scene.gltf"); },
-                                  "load model: ");
-        // auto m = utils::benchmark([]
-        //                           { return model::load_file("resources/models/survival_guitar_backpack.glb"); },
-        //                           "load model: ");
+        auto cam = example->get_camera();
+        if (cam.has_value()) {
+            main_camera = cam.value();
+        }
 
         while (!glfwWindowShouldClose(window))
         {
@@ -299,7 +286,7 @@ int main()
             if (counted_frames == fps.capacity())
             {
                 counted_frames = 0;
-                glfwSetWindowTitle(window, std::format("LearnOpenGL ({:.1f} fps)", fps.fps()).c_str());
+                glfwSetWindowTitle(window, std::format("LearnOpenGL - {} ({:.1f} fps)", example_name, fps.fps()).c_str());
             }
 
             process_input(window);
@@ -318,34 +305,27 @@ int main()
                 fb.clear_depth();
             }
 
-            // sky box
-
-            // glDepthFunc(GL_LEQUAL);
-            glDepthMask(GL_FALSE);
-            skybox_program.use();
-            skybox_proj_uniform.set_mat4(proj_mat);
-            skybox_view_uniform.set_mat4(glm::mat4(glm::mat3(view_mat)));
-            skybox_cubemap.bind_unit(0);
-            skybox_varray.bind();
-            skybox_varray.draw(draw_mode::triangles);
-            // glDepthFunc(GL_LESS);
-            glDepthMask(GL_TRUE);
-
-            m.draw(proj_mat, view_mat);
+            example->update();
+            example->draw(proj_mat, view_mat);
 
             frame_buffer::unbind_all();
 
-            // frame buffer to screen - by render (post)
-            /*
-            glDisable(GL_DEPTH_TEST);
-            fb.color_texture().bind_unit(0);
-            quad_program.use();
-            quad_varray.bind();
-            quad_varray.draw(draw_mode::triangles);
-            */
-
-            // frame buffer to screen - by blit
-            glBlitNamedFramebuffer(fb.handle(), 0, 0, 0, fb.width(), fb.height(), 0, 0, fb.width(), fb.height(), GL_COLOR_BUFFER_BIT, GL_NEAREST);
+            auto postprocessor_ptr = example->postprocessor_ptr();
+            if (postprocessor_ptr)
+            {
+                // frame buffer to screen - by render (post)
+                glDisable(GL_DEPTH_TEST);
+                fb.color_texture().bind_unit(0);
+                postprocessor_ptr->use();
+                quad_varray.bind();
+                quad_varray.draw(draw_mode::triangles);
+                glEnable(GL_DEPTH_TEST);
+            }
+            else
+            {
+                // frame buffer to screen - by blit
+                glBlitNamedFramebuffer(fb.handle(), 0, 0, 0, fb.width(), fb.height(), 0, 0, fb.width(), fb.height(), GL_COLOR_BUFFER_BIT, GL_NEAREST);
+            }
 
             glfwSwapBuffers(window);
             glfwPollEvents();

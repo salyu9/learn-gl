@@ -68,9 +68,9 @@ public:
     static bitmap from_memory(void const *p, size_t size, bitmap_channel required_channels = bitmap_channel::unspecified, bool flip_vertically = false);
 
     static bitmap from_file(const char *filename, bitmap_channel required_channels = bitmap_channel::unspecified, bool flip_vertically = false);
-    static bitmap from_file(std::string const &filename, bitmap_channel required_channels = bitmap_channel::unspecified, bool flip_vertically = false)
+    static bitmap from_file(std::filesystem::path const &filename, bitmap_channel required_channels = bitmap_channel::unspecified, bool flip_vertically = false)
     {
-        return from_file(filename.c_str(), required_channels, flip_vertically);
+        return from_file((const char *)filename.u8string().c_str(), required_channels, flip_vertically);
     }
 
 private:

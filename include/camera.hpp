@@ -53,6 +53,18 @@ public:
         update_camera_vectors();
     }
 
+    static camera look_at_camera(
+        glm::vec3 const &position,
+        glm::vec3 const &look_at_point = glm::vec3(0, 0, 0),
+        float near_z = default_near_z,
+        float far_z = default_far_z) noexcept
+    {
+        auto look_dir = glm::normalize(look_at_point - position);
+        auto yaw = glm::degrees(std::atan2(look_dir.z, look_dir.x));
+        auto pitch = glm::degrees(std::asin(look_dir.y));
+        return camera(position, glm::vec3(0, 1, 0), yaw, pitch, near_z, far_z);
+    }
+
     glm::mat4 projection(float aspect) const noexcept
     {
         return glm::perspective(glm::radians(zoom_), aspect, near_z_, far_z_);

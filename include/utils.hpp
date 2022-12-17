@@ -1,6 +1,7 @@
 #pragma once
 
 #include <string>
+#include <iostream>
 #include <fstream>
 #include <filesystem>
 #include <chrono>
@@ -76,7 +77,26 @@ namespace utils
         return N;
     }
 
+    // https://stackoverflow.com/questions/63115900
+    template <std::ranges::range R>
+    auto to_vector(R &&r)
+    {
+        std::vector<std::ranges::range_value_t<R>> v;
 
+        // if we can get a size, reserve that much
+        if constexpr (requires { std::ranges::size(r); })
+        {
+            v.reserve(std::ranges::size(r));
+        }
+
+        // push all the elements
+        for (auto &&e : r)
+        {
+            v.push_back(static_cast<decltype(e) &&>(e));
+        }
+
+        return v;
+    }
 
     //
     template <size_t N>
