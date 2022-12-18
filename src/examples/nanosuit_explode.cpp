@@ -11,12 +11,12 @@ class nanosuit_explode final : public example
 {
 public:
     nanosuit_explode()
-        : explode_{program_.uniform("explodeRatio", true)},
-          projection_{program_.uniform("projection", true)},
-          model_view_{program_.uniform("modelView", true)},
-          diffuse0_{program_.uniform("textureDiffuse0", true)}
+        : explode_{program_.uniform("explodeRatio")},
+          projection_{program_.uniform("projection")},
+          model_view_{program_.uniform("modelView")},
+          diffuse0_{program_.uniform("textureDiffuse0")}
     {
-        program_.uniform("explodeDistance", true).set_float(2);
+        program_.uniform("explodeDistance").set_float(2);
     }
 
     std::optional<camera> get_camera() override

@@ -36,6 +36,8 @@ constexpr float default_far_z = 100.0f;
 class camera
 {
 public:
+    inline static camera *active;
+
     explicit camera(
         glm::vec3 const &position = glm::vec3(0.0f, 0.0f, 0.0f),
         glm::vec3 const &up = glm::vec3(0.0f, 1.0f, 0.0f),

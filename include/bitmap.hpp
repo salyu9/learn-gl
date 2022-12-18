@@ -4,6 +4,7 @@
 #include <filesystem>
 #include <utility>
 #include <cstdint>
+#include <format>
 
 enum class bitmap_channel : int
 {
@@ -14,24 +15,29 @@ enum class bitmap_channel : int
     rgba = 4,
 };
 
-inline std::string to_string(bitmap_channel channel)
+template <>
+struct std::formatter<bitmap_channel> : std::formatter<std::string>
 {
-    switch (channel)
+    auto format(bitmap_channel channel, std::format_context &ctx)
     {
-    case bitmap_channel::unspecified:
-        return "unspecified";
-    case bitmap_channel::grey:
-        return "grey";
-    case bitmap_channel::grey_alpha:
-        return "grey_alpha";
-    case bitmap_channel::rgb:
-        return "rgb";
-    case bitmap_channel::rgba:
-        return "rgba";
-    default:
-        throw std::invalid_argument("invalid bitmap_channel value");
+        auto &&out = ctx.out();
+        switch (channel)
+        {
+        case bitmap_channel::unspecified:
+            return std::format_to(out, "unspecified");
+        case bitmap_channel::grey:
+            return std::format_to(out, "grey");
+        case bitmap_channel::grey_alpha:
+            return std::format_to(out, "grey_alpha");
+        case bitmap_channel::rgb:
+            return std::format_to(out, "rgb");
+        case bitmap_channel::rgba:
+            return std::format_to(out, "rgba");
+        default:
+            throw std::invalid_argument("invalid bitmap_channel value");
+        }
     }
-}
+};
 
 class bitmap final
 {

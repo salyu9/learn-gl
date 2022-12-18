@@ -710,13 +710,13 @@ namespace glwrap
 
     private:
         friend class shader_program;
-        shader_uniform(GLuint program_handle, std::string_view name, bool throw_if_not_found)
+        shader_uniform(GLuint program_handle, std::string_view name)
             : program_handle_(program_handle),
               location_(glGetUniformLocation(program_handle, name.data()))
         {
-            if (throw_if_not_found && this->location_ < 0)
+            if (this->location_ < 0)
             {
-                throw gl_error(std::string("Cannot find uniform \"") + std::string(name) + "\"");
+                std::cout << std::format("Cannot find uniform \"{}\"", name) << std::endl;
             }
         }
         GLuint program_handle_;
@@ -775,9 +775,9 @@ namespace glwrap
             std::swap(ref_shaders_, other.ref_shaders_);
         }
 
-        shader_uniform uniform(std::string_view name, bool throw_if_not_found = true) const
+        shader_uniform uniform(std::string_view name) const
         {
-            return shader_uniform(handle_, name, throw_if_not_found);
+            return shader_uniform(handle_, name);
         }
 
         GLuint handle() const noexcept { return handle_; }
@@ -811,6 +811,7 @@ namespace glwrap
         unspecified = 0,
         rgb = GL_RGB,
         rgba = GL_RGBA,
+        grey = GL_RED,
     };
 
     class texture2d final
@@ -818,7 +819,7 @@ namespace glwrap
     public:
         explicit texture2d(GLsizei width, GLsizei height, GLsizei multisamples = 0, texture2d_format format = texture2d_format::rgb)
         {
-            GLenum internal_format = format == texture2d_format::rgb ? GL_RGB8 : GL_RGBA8;
+            GLenum internal_format = to_internal_format(format);
             if (multisamples == 0)
             {
                 glCreateTextures(GL_TEXTURE_2D, 1, &handle_);
@@ -843,43 +844,7 @@ namespace glwrap
             else if (format == texture2d_format::rgba)
                 required_channel = bitmap_channel::rgba;
             auto bmp = bitmap::from_memory(p, size, required_channel, true);
-            if (format == texture2d_format::unspecified)
-            {
-                if (bmp.channels() == bitmap_channel::rgb)
-                    format = texture2d_format::rgb;
-                else if (bmp.channels() == bitmap_channel::rgba)
-                    format = texture2d_format::rgba;
-                else
-                    throw std::invalid_argument("bitmap from memory has " + to_string(bmp.channels()) + "channels, unknown format");
-            }
-            else
-            {
-                if (format == texture2d_format::rgb && bmp.channels() != bitmap_channel::rgb)
-                {
-                    throw std::invalid_argument("bitmap from memory has " + to_string(bmp.channels()) + "channels, 3 needed");
-                }
-                if (format == texture2d_format::rgba && bmp.channels() != bitmap_channel::rgba)
-                {
-                    throw std::invalid_argument("bitmap from memory has " + to_string(bmp.channels()) + "channels, 4 needed");
-                }
-            }
-
-            glCreateTextures(GL_TEXTURE_2D, 1, &handle_);
-            glTextureParameteri(handle_, GL_TEXTURE_MIN_FILTER, GL_LINEAR_MIPMAP_LINEAR);
-            glTextureParameteri(handle_, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-
-            GLenum internal_format = format == texture2d_format::rgb ? GL_RGB8 : GL_RGBA8;
-
-            glTextureStorage2D(handle_, bmp.max_mipmap_level(), internal_format, bmp.width(), bmp.height());
-            if (bmp.is_16bit())
-            {
-                glTextureSubImage2D(handle_, 0, 0, 0, bmp.width(), bmp.height(), static_cast<GLenum>(format), GL_UNSIGNED_SHORT, bmp.pixels_16bit().data());
-            }
-            else
-            {
-                glTextureSubImage2D(handle_, 0, 0, 0, bmp.width(), bmp.height(), static_cast<GLenum>(format), GL_UNSIGNED_BYTE, bmp.pixels().data());
-            }
-            glGenerateTextureMipmap(handle_);
+            create_resources(format, bmp);
         }
 
         explicit texture2d(std::string const &filename, texture2d_format format = texture2d_format::unspecified)
@@ -890,43 +855,7 @@ namespace glwrap
             else if (format == texture2d_format::rgba)
                 required_channel = bitmap_channel::rgba;
             auto bmp = bitmap::from_file(filename, required_channel, true);
-            if (format == texture2d_format::unspecified)
-            {
-                if (bmp.channels() == bitmap_channel::rgb)
-                    format = texture2d_format::rgb;
-                else if (bmp.channels() == bitmap_channel::rgba)
-                    format = texture2d_format::rgba;
-                else
-                    throw std::invalid_argument(std::string("bitmap \"") + filename + "\" has " + to_string(bmp.channels()) + "channels, unknown format");
-            }
-            else
-            {
-                if (format == texture2d_format::rgb && bmp.channels() != bitmap_channel::rgb)
-                {
-                    throw std::invalid_argument(std::string("bitmap \"") + filename + "\" has " + to_string(bmp.channels()) + "channels, 3 needed");
-                }
-                if (format == texture2d_format::rgba && bmp.channels() != bitmap_channel::rgba)
-                {
-                    throw std::invalid_argument(std::string("bitmap \"") + filename + "\" has " + to_string(bmp.channels()) + "channels, 4 needed");
-                }
-            }
-
-            glCreateTextures(GL_TEXTURE_2D, 1, &handle_);
-            glTextureParameteri(handle_, GL_TEXTURE_MIN_FILTER, GL_LINEAR_MIPMAP_LINEAR);
-            glTextureParameteri(handle_, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-
-            GLenum internal_format = format == texture2d_format::rgb ? GL_RGB8 : GL_RGBA8;
-
-            glTextureStorage2D(handle_, bmp.max_mipmap_level(), internal_format, bmp.width(), bmp.height());
-            if (bmp.is_16bit())
-            {
-                glTextureSubImage2D(handle_, 0, 0, 0, bmp.width(), bmp.height(), static_cast<GLenum>(format), GL_UNSIGNED_SHORT, bmp.pixels_16bit().data());
-            }
-            else
-            {
-                glTextureSubImage2D(handle_, 0, 0, 0, bmp.width(), bmp.height(), static_cast<GLenum>(format), GL_UNSIGNED_BYTE, bmp.pixels().data());
-            }
-            glGenerateTextureMipmap(handle_);
+            create_resources(format, bmp);
         }
 
         texture2d(texture2d const &) = delete;
@@ -949,8 +878,6 @@ namespace glwrap
         void swap(texture2d &other) noexcept
         {
             std::swap(handle_, other.handle_);
-            std::swap(width_, other.width_);
-            std::swap(height_, other.height_);
         }
 
         void bind()
@@ -971,9 +898,69 @@ namespace glwrap
     private:
         texture2d() {}
 
+        void create_resources(texture2d_format format, bitmap & bmp)
+        {
+            if (format == texture2d_format::unspecified)
+            {
+                if (bmp.channels() == bitmap_channel::rgb)
+                    format = texture2d_format::rgb;
+                else if (bmp.channels() == bitmap_channel::rgba)
+                    format = texture2d_format::rgba;
+                else if (bmp.channels() == bitmap_channel::grey)
+                    format = texture2d_format::grey;
+                else
+                    throw std::invalid_argument(std::format("bitmap from memory has {} channels, unknown format.", bmp.channels()));
+            }
+            else
+            {
+                if (format == texture2d_format::rgb && bmp.channels() != bitmap_channel::rgb)
+                {
+                    throw std::invalid_argument(std::format("bitmap from memory has {} channels, 3 needed.", bmp.channels()));
+                }
+                if (format == texture2d_format::rgba && bmp.channels() != bitmap_channel::rgba)
+                {
+                    throw std::invalid_argument(std::format("bitmap from memory has {} channels, 4 needed.", bmp.channels()));
+                }
+                if (format == texture2d_format::grey && bmp.channels() != bitmap_channel::grey)
+                {
+                    throw std::invalid_argument(std::format("bitmap from memory has {} channels, 1 needed.", bmp.channels()));
+                }
+            }
+
+            glCreateTextures(GL_TEXTURE_2D, 1, &handle_);
+            glTextureParameteri(handle_, GL_TEXTURE_MIN_FILTER, GL_LINEAR_MIPMAP_LINEAR);
+            glTextureParameteri(handle_, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+
+            GLenum internal_format = to_internal_format(format);
+
+            glTextureStorage2D(handle_, bmp.max_mipmap_level(), internal_format, bmp.width(), bmp.height());
+            if (bmp.is_16bit())
+            {
+                glTextureSubImage2D(handle_, 0, 0, 0, bmp.width(), bmp.height(), static_cast<GLenum>(format), GL_UNSIGNED_SHORT, bmp.pixels_16bit().data());
+            }
+            else
+            {
+                glTextureSubImage2D(handle_, 0, 0, 0, bmp.width(), bmp.height(), static_cast<GLenum>(format), GL_UNSIGNED_BYTE, bmp.pixels().data());
+            }
+            glGenerateTextureMipmap(handle_);
+        }
+
+        GLenum to_internal_format(texture2d_format format)
+        {
+            switch (format)
+            {
+                case texture2d_format::rgb:
+                    return GL_RGB8;
+                case texture2d_format::rgba:
+                    return GL_RGBA8;
+                case texture2d_format::grey:
+                    return GL_R8;
+                default:
+                    throw std::invalid_argument(std::format("Cannot create internal format for {}", format));
+            }
+        }
+
         GLuint handle_{0};
-        GLsizei width_{0};
-        GLsizei height_{0};
 
         friend class frame_buffer;
     };
@@ -1087,9 +1074,10 @@ namespace glwrap
             }
             glNamedFramebufferRenderbuffer(handle_, GL_DEPTH_ATTACHMENT, GL_RENDERBUFFER, render_buffer_handle_);
 
-            if (glCheckNamedFramebufferStatus(handle_, GL_FRAMEBUFFER) != GL_FRAMEBUFFER_COMPLETE)
+            auto status = glCheckNamedFramebufferStatus(handle_, GL_FRAMEBUFFER);
+            if (status != GL_FRAMEBUFFER_COMPLETE)
             {
-                throw gl_error("Frame buffer uncomplete.");
+                throw gl_error(std::format("Frame buffer uncomplete, status = {}", status));
             }
         }
 
@@ -1167,3 +1155,25 @@ namespace glwrap
     };
 
 }
+
+template <>
+struct std::formatter<glwrap::texture2d_format> : std::formatter<std::string>
+{
+    auto format(glwrap::texture2d_format format, std::format_context &ctx)
+    {
+        auto &&out = ctx.out();
+        switch (format)
+        {
+        case glwrap::texture2d_format::unspecified:
+            return std::format_to(out, "unspecified");
+        case glwrap::texture2d_format::rgb:
+            return std::format_to(out, "rgb");
+        case glwrap::texture2d_format::rgba:
+            return std::format_to(out, "rgba");
+        case glwrap::texture2d_format::grey:
+            return std::format_to(out, "grey");
+        default:
+            throw std::invalid_argument(std::format("Invalid texture2d_format type: {}", static_cast<int>(format)));
+        }
+    }
+};

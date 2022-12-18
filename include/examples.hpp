@@ -13,7 +13,6 @@
 class example
 {
 public:
-    virtual void init() { }
     virtual std::optional<camera> get_camera() { return std::nullopt; }
     virtual void update() { }
     virtual void draw(glm::mat4 const &projection, glm::mat4 const &view) = 0;
@@ -25,13 +24,18 @@ std::unique_ptr<example> create_nanosuit();
 std::unique_ptr<example> create_nanosuit_explode();
 std::unique_ptr<example> create_asteroids();
 std::unique_ptr<example> create_asteroids_instanced();
+std::unique_ptr<example> create_normal_map();
+std::unique_ptr<example> create_parallax_map();
 
-inline std::vector<std::tuple<std::string_view, example_creator>> get_examples()
+inline std::vector<std::tuple<std::string_view, example_creator>>
+    get_examples()
 {
     return {
         {"model load", create_nanosuit},
         {"explode (geometry shader)", create_nanosuit_explode},
         {"asteroid field", create_asteroids},
-        {"asteroid field (instancing)", create_asteroids_instanced}
+        {"asteroid field (instancing)", create_asteroids_instanced},
+        {"normal map", create_normal_map},
+        {"parallax map", create_parallax_map},
     };
 }

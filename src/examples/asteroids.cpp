@@ -54,6 +54,8 @@ public:
         }
 
         attach_to_varray2(mats_);
+
+        glClearColor(0, 0, 0, 0);
     }
 
     void attach_to_varray2(std::vector<glm::mat4> const &mats)
@@ -79,11 +81,6 @@ public:
 
             varray.binding_divisor(binding_index, 1);
         }
-    }
-
-    void init() override
-    {
-        glClearColor(0, 0, 0, 0);
     }
 
     std::optional<camera> get_camera() override

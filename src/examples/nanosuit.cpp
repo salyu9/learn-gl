@@ -12,9 +12,9 @@ class nanosuit final : public example
 {
 public:
     nanosuit()
-     : projection_{program_.uniform("projection", true)},
-       model_view_{program_.uniform("modelView", true)},
-       diffuse0_{program_.uniform("textureDiffuse0", true)}
+     : projection_{program_.uniform("projection")},
+       model_view_{program_.uniform("modelView")},
+       diffuse0_{program_.uniform("textureDiffuse0")}
     {
     }
 

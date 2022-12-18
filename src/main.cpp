@@ -128,11 +128,37 @@ void cursor_pos_callback(GLFWwindow *window, double x, double y)
     if (!wondering) {
         return;
     }
-    cursor.delta_x = x - cursor.x;
-    cursor.delta_y = y - cursor.y;
-    cursor.x = x;
-    cursor.y = y;
-    main_camera.process_mouse_movement(static_cast<float>(cursor.delta_x), -static_cast<float>(cursor.delta_y));
+
+    int wnd_width, wnd_height;
+    glfwGetWindowSize(window, &wnd_width, &wnd_height);
+
+    auto ori_x = x;
+    auto ori_y = y;
+
+    while (x < 0) {
+        x += wnd_width;
+    }
+    while (x > wnd_width) {
+        x -= wnd_width;
+    }
+    while (y < 0) {
+        y += wnd_height;
+    }
+    while (y > wnd_height) {
+        y -= wnd_height;
+    }
+    if (x != ori_x || y != ori_y) {
+        cursor.x = x;
+        cursor.y = y;
+        glfwSetCursorPos(window, x, y);
+    }
+    else {
+        cursor.delta_x = x - cursor.x;
+        cursor.delta_y = y - cursor.y;
+        cursor.x = x;
+        cursor.y = y;
+        main_camera.process_mouse_movement(static_cast<float>(cursor.delta_x), -static_cast<float>(cursor.delta_y));
+    }
 }
 
 void mouse_button_callback(GLFWwindow *window, int button, int action, int mods)
@@ -184,6 +210,7 @@ void GLAPIENTRY message_callback(GLenum source,
 }
 
 int main()
+try
 {
     auto examples = get_examples();
     std::cout << "Examples:" << std::endl;
@@ -271,12 +298,11 @@ int main()
             shader::compile_file("shaders/base/fbuffer_fs.glsl", shader_type::fragment));
         quad_program.uniform("screenTexture").set_int(0);
 
-        example->init();
-
         auto cam = example->get_camera();
         if (cam.has_value()) {
             main_camera = cam.value();
         }
+        camera::active = &main_camera;
 
         while (!glfwWindowShouldClose(window))
         {
@@ -337,4 +363,8 @@ int main()
     }
     glfwTerminate();
     return EXIT_SUCCESS;
+}
+catch (std::exception const& e)
+{
+    std::cout << e.what() << std::endl;
 }
