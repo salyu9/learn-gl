@@ -19,12 +19,15 @@
 #include "examples.hpp"
 
 using namespace glwrap;
+using namespace std::literals;
 
 // ----- window status ---------
 const int init_width = 1600;
 const int init_height = 1200;
 int screen_width = init_width;
 int screen_height = init_height;
+bool is_hdr;
+std::unique_ptr<example> example_ptr;
 std::optional<frame_buffer> fbuffer{};
 bool wireframe_mode = false;
 GLsizei multisamples = 0;
@@ -32,8 +35,15 @@ GLint max_samples;
 
 void reset_frame_buffer()
 {
-    fbuffer.reset();
-    fbuffer.emplace(screen_width, screen_height, multisamples);
+    if (example_ptr->custom_render())
+    {
+        example_ptr->reset_frame_buffer(screen_width, screen_height);
+    }
+    else
+    {
+        fbuffer.reset();
+        fbuffer.emplace(screen_width, screen_height, multisamples, is_hdr);
+    }
 }
 
 // ------------------------------
@@ -257,7 +267,6 @@ try
     glEnable(GL_DEPTH_TEST);
     glViewport(0, 0, init_width, init_height);
     glfwSetFramebufferSizeCallback(window, framebuffer_size_callback);
-    framebuffer_size_callback(window, init_width, init_height);
     glfwSetKeyCallback(window, key_callback);
     glfwSetCursorPosCallback(window, cursor_pos_callback);
     glfwSetMouseButtonCallback(window, mouse_button_callback);
@@ -274,7 +283,9 @@ try
 
     try
     {
-        auto example = example_creator();
+        example_ptr = example_creator();
+        is_hdr = example_ptr->is_hdr();
+        framebuffer_size_callback(window, init_width, init_height);
 
         // frame buffer
         struct quad_vertex_t
@@ -294,15 +305,14 @@ try
         };
         auto quad_varray = auto_vertex_array(quad_vbuffer);
         auto quad_program = shader_program(
-            shader::compile_file("shaders/base/fbuffer_vs.glsl", shader_type::vertex),
-            shader::compile_file("shaders/base/fbuffer_fs.glsl", shader_type::fragment));
+            shader::compile_file("shaders/base/fbuffer_vs.glsl"sv, shader_type::vertex),
+            shader::compile_file(is_hdr ? "shaders/base/fbuffer_fs_reinhard.glsl"sv : "shaders/base/fbuffer_fs.glsl"sv, shader_type::fragment));
         quad_program.uniform("screenTexture").set_int(0);
 
-        auto cam = example->get_camera();
+        auto cam = example_ptr->get_camera();
         if (cam.has_value()) {
             main_camera = cam.value();
         }
-        camera::active = &main_camera;
 
         while (!glfwWindowShouldClose(window))
         {
@@ -318,39 +328,38 @@ try
             process_input(window);
 
             auto proj_mat = main_camera.projection(static_cast<float>(screen_width) / screen_height);
-            auto view_mat = main_camera.view();
 
-            auto &fb = fbuffer.value();
-            fb.bind();
-            if (wireframe_mode)
-            {
-                fb.clear({0.2f, 0.3f, 0.3f, 1.0f});
-            }
-            else
-            {
-                fb.clear_depth();
+            if (!example_ptr->custom_render()) {
+                auto &fb = fbuffer.value();
+                fb.bind();
+                if (wireframe_mode) {
+                    fb.clear({0.2f, 0.3f, 0.3f, 1.0f});
+                }
+                else {
+                    fb.clear_depth();
+                }
             }
 
-            example->update();
-            example->draw(proj_mat, view_mat);
+            example_ptr->update();
+            example_ptr->draw(proj_mat, main_camera);
 
             frame_buffer::unbind_all();
 
-            auto postprocessor_ptr = example->postprocessor_ptr();
-            if (postprocessor_ptr)
-            {
-                // frame buffer to screen - by render (post)
+            if (!example_ptr->custom_render()) {
                 glDisable(GL_DEPTH_TEST);
+                auto &fb = fbuffer.value();
                 fb.color_texture().bind_unit(0);
-                postprocessor_ptr->use();
                 quad_varray.bind();
+
+                auto postprocessor_ptr = example_ptr->postprocessor_ptr();
+                if (postprocessor_ptr) {
+                    postprocessor_ptr->use();
+                }
+                else {
+                    quad_program.use();
+                }
                 quad_varray.draw(draw_mode::triangles);
                 glEnable(GL_DEPTH_TEST);
-            }
-            else
-            {
-                // frame buffer to screen - by blit
-                glBlitNamedFramebuffer(fb.handle(), 0, 0, 0, fb.width(), fb.height(), 0, 0, fb.width(), fb.height(), GL_COLOR_BUFFER_BIT, GL_NEAREST);
             }
 
             glfwSwapBuffers(window);

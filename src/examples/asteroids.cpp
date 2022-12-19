@@ -89,9 +89,11 @@ public:
         //return camera(glm::vec3(0, 0, 50.0f), glm::vec3(0, 1, 0), -100);
     }
 
-    void draw(glm::mat4 const &projection, glm::mat4 const &view) override
+    void draw(glm::mat4 const &projection, camera &cam) override
     {
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+
+        auto view = cam.view();
 
         draw_planet(projection, view);
         draw_asteroids(projection, view);

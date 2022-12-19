@@ -4,6 +4,7 @@
 #include "common_obj.hpp"
 
 using namespace glwrap;
+using namespace std::literals;
 
 struct vert_t
 {
@@ -30,20 +31,21 @@ public:
         return camera::look_at_camera(glm::vec3(10, 0, 10));
     }
 
-    void draw(glm::mat4 const &projection, glm::mat4 const &view) override
+    void draw(glm::mat4 const &projection, camera &cam) override
     {
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
         rotation_ += timer::delta_time() * 1;
         auto model = glm::rotate(glm::mat4(1), rotation_, glm::vec3(0, 1, 0));
         auto normal_mat = glm::inverse(glm::transpose(model));
+        auto view = cam.view();
 
         program_.use();
         projection_.set_mat4(projection);
         view_mat_.set_mat4(view);
         model_mat_.set_mat4(model);
         normal_mat_.set_mat4(normal_mat);
-        view_position_.set_vec3(camera::active->position());
+        view_position_.set_vec3(cam.position());
         diffuse_sampler_.set_int(0);
         normal_sampler_.set_int(1);
         depth_sampler_.set_int(2);
@@ -63,6 +65,8 @@ public:
         box_.draw(projection, view);
     }
 
+    bool is_hdr() override { return true; }
+
     shader_program program_{
         shader::compile_file("shaders/parallax_map_vs.glsl", shader_type::vertex),
         shader::compile_file("shaders/parallax_map_fs.glsl", shader_type::fragment),
@@ -77,13 +81,13 @@ public:
     shader_uniform light_position_{program_.uniform("lightPosition")};
     shader_uniform view_position_{program_.uniform("viewPosition")};
 
-    texture2d diffuse_map1_{"resources/textures/bricks2.jpg"};
-    texture2d normal_map1_{"resources/textures/bricks2_normal.jpg"};
-    texture2d depth_map1_{"resources/textures/bricks2_disp.jpg"};
+    texture2d diffuse_map1_{"resources/textures/bricks2.jpg"sv, true};
+    texture2d normal_map1_{"resources/textures/bricks2_normal.jpg"sv};
+    texture2d depth_map1_{"resources/textures/bricks2_disp.jpg"sv};
 
-    texture2d diffuse_map2_{"resources/textures/wooden_toy.png"};
-    texture2d normal_map2_{"resources/textures/wooden_toy_normal.png"};
-    texture2d depth_map2_{"resources/textures/wooden_toy_disp.png"};
+    texture2d diffuse_map2_{"resources/textures/wood.png"sv, true};
+    texture2d normal_map2_{"resources/textures/wooden_toy_normal.png"sv};
+    texture2d depth_map2_{"resources/textures/wooden_toy_disp.png"sv};
 
     vertex_buffer<vert_t> vbuffer1_{
         {glm::vec3(0, -5, +5), glm::vec3(+1, 0, 0), glm::vec2(0, 0), glm::vec3(0, 0, -1), glm::vec3(0, 1, 0)},

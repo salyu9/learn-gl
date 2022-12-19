@@ -23,8 +23,10 @@ public:
         return camera(glm::vec3(-5.0f, 15.0f, 10.0f), glm::vec3(0, 1, 0), -60, -10);
     }
 
-    void draw(glm::mat4 const &projection, glm::mat4 const &view) override
+    void draw(glm::mat4 const &projection, camera & cam) override
     {
+        auto view = cam.view();
+
         skybox_.draw(projection, view);
 
         program_.use();

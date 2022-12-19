@@ -194,7 +194,12 @@ namespace glwrap
                     }
                     else
                     {
-                        textures_.emplace_back((directory_ / path).string());
+                        if (tex_type == texture_type::diffuse) {
+                            textures_.emplace_back((directory_ / path).string(), true);
+                        }
+                        else {
+                            textures_.emplace_back((directory_ / path).string());
+                        }
                     }
                 }
                 else

@@ -99,6 +99,7 @@
 #include <stdexcept>
 #include <cstdint>
 #include <array>
+#include <map>
 #include <tuple>
 #include <optional>
 #include <format>
@@ -809,17 +810,26 @@ namespace glwrap
     enum class texture2d_format : GLenum
     {
         unspecified = 0,
-        rgb = GL_RGB,
-        rgba = GL_RGBA,
-        grey = GL_RED,
+        rgb,
+        rgba,
+        srgb,
+        srgba,
+        grey,
+    };
+
+    enum class texture2d_elem_type : GLenum
+    {
+        u8,
+        f16,
+        f32,
     };
 
     class texture2d final
     {
     public:
-        explicit texture2d(GLsizei width, GLsizei height, GLsizei multisamples = 0, texture2d_format format = texture2d_format::rgb)
+        explicit texture2d(GLsizei width, GLsizei height, GLsizei multisamples = 0, texture2d_format format = texture2d_format::rgb, texture2d_elem_type elem_type = texture2d_elem_type::u8)
         {
-            GLenum internal_format = to_internal_format(format);
+            GLenum internal_format = to_internal_format(format, elem_type);
             if (multisamples == 0)
             {
                 glCreateTextures(GL_TEXTURE_2D, 1, &handle_);
@@ -836,7 +846,8 @@ namespace glwrap
             }
         }
 
-        explicit texture2d(void const * p, size_t size, texture2d_format format = texture2d_format::unspecified)
+        explicit texture2d(void const *p, size_t size, bool srgb = false, texture2d_elem_type elem_type = texture2d_elem_type::u8,
+          texture2d_format format = texture2d_format::unspecified)
         {
             auto required_channel = bitmap_channel::unspecified;
             if (format == texture2d_format::rgb)
@@ -844,10 +855,11 @@ namespace glwrap
             else if (format == texture2d_format::rgba)
                 required_channel = bitmap_channel::rgba;
             auto bmp = bitmap::from_memory(p, size, required_channel, true);
-            create_resources(format, bmp);
+            create_resources(srgb, format, elem_type, bmp);
         }
 
-        explicit texture2d(std::string const &filename, texture2d_format format = texture2d_format::unspecified)
+        explicit texture2d(std::filesystem::path const &filename, bool srgb = false, texture2d_elem_type elem_type = texture2d_elem_type::u8,
+          texture2d_format format = texture2d_format::unspecified)
         {
             auto required_channel = bitmap_channel::unspecified;
             if (format == texture2d_format::rgb)
@@ -855,7 +867,7 @@ namespace glwrap
             else if (format == texture2d_format::rgba)
                 required_channel = bitmap_channel::rgba;
             auto bmp = bitmap::from_file(filename, required_channel, true);
-            create_resources(format, bmp);
+            create_resources(srgb, format, elem_type, bmp);
         }
 
         texture2d(texture2d const &) = delete;
@@ -898,14 +910,14 @@ namespace glwrap
     private:
         texture2d() {}
 
-        void create_resources(texture2d_format format, bitmap & bmp)
+        void create_resources(bool srgb, texture2d_format format, texture2d_elem_type elem_type, bitmap & bmp)
         {
             if (format == texture2d_format::unspecified)
             {
                 if (bmp.channels() == bitmap_channel::rgb)
-                    format = texture2d_format::rgb;
+                    format = srgb ? texture2d_format::srgb : texture2d_format::rgb;
                 else if (bmp.channels() == bitmap_channel::rgba)
-                    format = texture2d_format::rgba;
+                    format = srgb ? texture2d_format::srgba : texture2d_format::rgba;
                 else if (bmp.channels() == bitmap_channel::grey)
                     format = texture2d_format::grey;
                 else
@@ -913,11 +925,13 @@ namespace glwrap
             }
             else
             {
-                if (format == texture2d_format::rgb && bmp.channels() != bitmap_channel::rgb)
+                if ((format == texture2d_format::rgb || format == texture2d_format::srgb)
+                 && bmp.channels() != bitmap_channel::rgb)
                 {
                     throw std::invalid_argument(std::format("bitmap from memory has {} channels, 3 needed.", bmp.channels()));
                 }
-                if (format == texture2d_format::rgba && bmp.channels() != bitmap_channel::rgba)
+                if ((format == texture2d_format::rgba || format == texture2d_format::srgba)
+                 && bmp.channels() != bitmap_channel::rgba)
                 {
                     throw std::invalid_argument(std::format("bitmap from memory has {} channels, 4 needed.", bmp.channels()));
                 }
@@ -931,33 +945,63 @@ namespace glwrap
             glTextureParameteri(handle_, GL_TEXTURE_MIN_FILTER, GL_LINEAR_MIPMAP_LINEAR);
             glTextureParameteri(handle_, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
 
-            GLenum internal_format = to_internal_format(format);
-
-            glTextureStorage2D(handle_, bmp.max_mipmap_level(), internal_format, bmp.width(), bmp.height());
+            glTextureStorage2D(handle_, bmp.max_mipmap_level(), to_internal_format(format, elem_type), bmp.width(), bmp.height());
             if (bmp.is_16bit())
             {
-                glTextureSubImage2D(handle_, 0, 0, 0, bmp.width(), bmp.height(), static_cast<GLenum>(format), GL_UNSIGNED_SHORT, bmp.pixels_16bit().data());
+                glTextureSubImage2D(handle_, 0, 0, 0, bmp.width(), bmp.height(), to_image_format(format), GL_UNSIGNED_SHORT, bmp.pixels_16bit().data());
             }
             else
             {
-                glTextureSubImage2D(handle_, 0, 0, 0, bmp.width(), bmp.height(), static_cast<GLenum>(format), GL_UNSIGNED_BYTE, bmp.pixels().data());
+                glTextureSubImage2D(handle_, 0, 0, 0, bmp.width(), bmp.height(), to_image_format(format), GL_UNSIGNED_BYTE, bmp.pixels().data());
             }
             glGenerateTextureMipmap(handle_);
         }
 
-        GLenum to_internal_format(texture2d_format format)
+        GLenum to_image_format(texture2d_format format)
         {
             switch (format)
             {
-                case texture2d_format::rgb:
-                    return GL_RGB8;
-                case texture2d_format::rgba:
-                    return GL_RGBA8;
-                case texture2d_format::grey:
-                    return GL_R8;
-                default:
-                    throw std::invalid_argument(std::format("Cannot create internal format for {}", format));
+            case texture2d_format::rgb:
+                return GL_RGB;
+            case texture2d_format::srgb:
+                return GL_RGB;
+            case texture2d_format::rgba:
+                return GL_RGBA;
+            case texture2d_format::srgba:
+                return GL_RGBA;
+            case texture2d_format::grey:
+                return GL_RED;
+            default:
+                throw std::invalid_argument(std::format("Cannot create internal format for {}", format));
             }
+        }
+
+        GLenum to_internal_format(texture2d_format format, texture2d_elem_type elem_type)
+        {
+            static std::map<std::tuple<texture2d_format, texture2d_elem_type>, GLenum> map_{
+                {{texture2d_format::rgb, texture2d_elem_type::u8}, GL_RGB8},
+                {{texture2d_format::rgb, texture2d_elem_type::f16}, GL_RGB16F},
+                {{texture2d_format::rgb, texture2d_elem_type::f32}, GL_RGB32F},
+
+                {{texture2d_format::srgb, texture2d_elem_type::u8}, GL_SRGB8},
+
+                {{texture2d_format::rgba, texture2d_elem_type::u8}, GL_RGBA8},
+                {{texture2d_format::rgba, texture2d_elem_type::f16}, GL_RGBA16F},
+                {{texture2d_format::rgba, texture2d_elem_type::f32}, GL_RGBA32F},
+
+                {{texture2d_format::srgba, texture2d_elem_type::u8}, GL_SRGB8_ALPHA8},
+
+                {{texture2d_format::grey, texture2d_elem_type::u8}, GL_R8},
+                {{texture2d_format::grey, texture2d_elem_type::f16}, GL_R16F},
+                {{texture2d_format::grey, texture2d_elem_type::f32}, GL_R32F},
+            };
+
+            auto iter = map_.find({format, elem_type});
+            if (iter == map_.end())
+            {    
+                throw std::invalid_argument(std::format("Cannot create internal format for {}, {}", format, elem_type));
+            }
+            return iter->second;
         }
 
         GLuint handle_{0};
@@ -996,7 +1040,7 @@ namespace glwrap
             }
 
             glCreateTextures(GL_TEXTURE_CUBE_MAP, 1, &handle_);
-            glTextureStorage2D(handle_, 1, GL_RGB8, width, height);
+            glTextureStorage2D(handle_, 1, GL_SRGB8, width, height);
             for (auto &[bmp, _, i] : faces)
             {
                 glTextureSubImage3D(handle_, 0, 0, 0, i, width, height, 1, GL_RGB, GL_UNSIGNED_BYTE, bmp.pixels().data());
@@ -1056,9 +1100,9 @@ namespace glwrap
     class frame_buffer final
     {
     public:
-        frame_buffer(GLsizei width, GLsizei height, GLsizei multisamples = 0)
+        frame_buffer(GLsizei width, GLsizei height, GLsizei multisamples = 0, bool is_hdr = false)
             : width_(width), height_(height), multisamples_(multisamples),
-              color_tex_(texture2d(width, height, multisamples))
+              color_tex_(texture2d(width, height, multisamples, texture2d_format::rgba, is_hdr ? texture2d_elem_type::f16 : texture2d_elem_type::u8))
         {
             glCreateFramebuffers(1, &handle_);
             glNamedFramebufferTexture(handle_, GL_COLOR_ATTACHMENT0, color_tex_.handle(), 0);
@@ -1172,6 +1216,26 @@ struct std::formatter<glwrap::texture2d_format> : std::formatter<std::string>
             return std::format_to(out, "rgba");
         case glwrap::texture2d_format::grey:
             return std::format_to(out, "grey");
+        default:
+            throw std::invalid_argument(std::format("Invalid texture2d_format type: {}", static_cast<int>(format)));
+        }
+    }
+};
+
+template <>
+struct std::formatter<glwrap::texture2d_elem_type> : std::formatter<std::string>
+{
+    auto format(glwrap::texture2d_elem_type format, std::format_context &ctx)
+    {
+        auto &&out = ctx.out();
+        switch (format)
+        {
+        case glwrap::texture2d_elem_type::u8:
+            return std::format_to(out, "u8");
+        case glwrap::texture2d_elem_type::f16:
+            return std::format_to(out, "f16");
+        case glwrap::texture2d_elem_type::f32:
+            return std::format_to(out, "f32");
         default:
             throw std::invalid_argument(std::format("Invalid texture2d_format type: {}", static_cast<int>(format)));
         }
