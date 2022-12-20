@@ -35,32 +35,36 @@ public:
     {
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
-        rotation_ += timer::delta_time() * 1;
-        auto model = glm::rotate(glm::mat4(1), rotation_, glm::vec3(0, 1, 0));
-        auto normal_mat = glm::inverse(glm::transpose(model));
         auto view = cam.view();
 
         program_.use();
         projection_.set_mat4(projection);
         view_mat_.set_mat4(view);
-        model_mat_.set_mat4(model);
-        normal_mat_.set_mat4(normal_mat);
         view_position_.set_vec3(cam.position());
         diffuse_sampler_.set_int(0);
         normal_sampler_.set_int(1);
         depth_sampler_.set_int(2);
 
+        auto rotation = timer::time() * 1;
+        auto model = glm::rotate(glm::mat4(1), rotation, glm::vec3(0, 1, 0));
+        auto normal_mat = glm::inverse(glm::transpose(model));
+        model_mat_.set_mat4(model);
+        normal_mat_.set_mat4(normal_mat);
         diffuse_map1_.bind_unit(0);
         normal_map1_.bind_unit(1);
         depth_map1_.bind_unit(2);
-        varray1_.bind();
-        varray1_.draw(draw_mode::triangles);
+        varray_.bind();
+        varray_.draw(draw_mode::triangles);
 
+        model = glm::rotate(glm::mat4(1), rotation + glm::radians(180.0f), glm::vec3(0, 1, 0));
+        normal_mat = glm::inverse(glm::transpose(model));
+        model_mat_.set_mat4(model);
+        normal_mat_.set_mat4(normal_mat);
         diffuse_map2_.bind_unit(0);
         normal_map2_.bind_unit(1);
         depth_map2_.bind_unit(2);
-        varray2_.bind();
-        varray2_.draw(draw_mode::triangles);
+        varray_.bind();
+        varray_.draw(draw_mode::triangles);
 
         box_.draw(projection, view);
     }
@@ -89,27 +93,18 @@ public:
     texture2d normal_map2_{"resources/textures/wooden_toy_normal.png"sv};
     texture2d depth_map2_{"resources/textures/wooden_toy_disp.png"sv};
 
-    vertex_buffer<vert_t> vbuffer1_{
-        {glm::vec3(0, -5, +5), glm::vec3(+1, 0, 0), glm::vec2(0, 0), glm::vec3(0, 0, -1), glm::vec3(0, 1, 0)},
-        {glm::vec3(0, -5, -5), glm::vec3(+1, 0, 0), glm::vec2(1, 0), glm::vec3(0, 0, -1), glm::vec3(0, 1, 0)},
-        {glm::vec3(0, +5, -5), glm::vec3(+1, 0, 0), glm::vec2(1, 1), glm::vec3(0, 0, -1), glm::vec3(0, 1, 0)},
-        {glm::vec3(0, +5, +5), glm::vec3(+1, 0, 0), glm::vec2(0, 1), glm::vec3(0, 0, -1), glm::vec3(0, 1, 0)},
-    };
-    vertex_buffer<vert_t> vbuffer2_{
-        {glm::vec3(0, -5, -5), glm::vec3(-1, 0, 0), glm::vec2(0, 0), glm::vec3(0, 0, +1), glm::vec3(0, 1, 0)},
-        {glm::vec3(0, -5, +5), glm::vec3(-1, 0, 0), glm::vec2(1, 0), glm::vec3(0, 0, +1), glm::vec3(0, 1, 0)},
-        {glm::vec3(0, +5, +5), glm::vec3(-1, 0, 0), glm::vec2(1, 1), glm::vec3(0, 0, +1), glm::vec3(0, 1, 0)},
-        {glm::vec3(0, +5, -5), glm::vec3(-1, 0, 0), glm::vec2(0, 1), glm::vec3(0, 0, +1), glm::vec3(0, 1, 0)},
-    };
-
-    index_buffer<GLuint> ibuffer_{0, 1, 2, 2, 3, 0};
-
-    vertex_array varray1_{auto_vertex_array(ibuffer_, vbuffer1_)};
-    vertex_array varray2_{auto_vertex_array(ibuffer_, vbuffer2_)};
+    vertex_array varray_{auto_vertex_array(
+        index_buffer<GLuint>{0, 1, 2, 2, 3, 0},
+        vertex_buffer<vert_t>{
+            {glm::vec3(0, -5, +5), glm::vec3(1, 0, 0), glm::vec2(0, 0), glm::vec3(0, 0, -1), glm::vec3(0, 1, 0)},
+            {glm::vec3(0, -5, -5), glm::vec3(1, 0, 0), glm::vec2(1, 0), glm::vec3(0, 0, -1), glm::vec3(0, 1, 0)},
+            {glm::vec3(0, +5, -5), glm::vec3(1, 0, 0), glm::vec2(1, 1), glm::vec3(0, 0, -1), glm::vec3(0, 1, 0)},
+            {glm::vec3(0, +5, +5), glm::vec3(1, 0, 0), glm::vec2(0, 1), glm::vec3(0, 0, -1), glm::vec3(0, 1, 0)},
+        }
+    )};
 
     box box_{glm::vec3(2, 3, -5), glm::vec3(0.2f, 0.2f, 0.2f)};
 
-    float rotation_ = 0;
 };
 
 std::unique_ptr<example> create_parallax_map()

@@ -7,21 +7,6 @@
 #include <chrono>
 #include <memory>
 
-namespace file
-{
-    inline std::string read_all_text(std::filesystem::path const& filename)
-    {
-        std::ifstream f(filename);
-        if (!f) throw std::invalid_argument("Open file " + filename.string() + " failed");
-        f.seekg(0, std::ios_base::end);
-        auto size = f.tellg();
-        f.seekg(0, std::ios_base::beg);
-        std::string res(size, '\0');
-        f.read(res.data(), size);
-        return res;
-    }
-}
-
 namespace utils
 {
     namespace details

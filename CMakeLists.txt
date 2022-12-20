@@ -48,6 +48,14 @@ FetchContent_Declare(
 )
 FetchContent_MakeAvailable(assimp)
 
+# ------ json --------------
+
+FetchContent_Declare(
+    json
+    URL https://github.com/nlohmann/json/releases/download/v3.11.2/json.tar.xz
+)
+FetchContent_MakeAvailable(json)
+
 # ------ learn-gl ----------
 
 file(GLOB_RECURSE include CONFIGURE_DEPENDS "include/*")
@@ -57,7 +65,7 @@ file(GLOB_RECURSE src CONFIGURE_DEPENDS "src/*")
 
 add_executable(learn-gl "${src}" "external/glad/src/gl.c" "${include}")
 target_include_directories(learn-gl PRIVATE include external/stb external/glad/include)
-target_link_libraries(learn-gl glm glfw assimp)
+target_link_libraries(learn-gl PRIVATE glm glfw assimp nlohmann_json::nlohmann_json)
 
 target_compile_features(learn-gl PUBLIC cxx_std_20)
 set_target_properties(learn-gl PROPERTIES CXX_EXTENSIONS OFF)

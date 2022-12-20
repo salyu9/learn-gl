@@ -94,6 +94,8 @@
 #include <utility>
 #include <string_view>
 #include <string>
+#include <iostream>
+#include <fstream>
 #include <filesystem>
 #include <exception>
 #include <stdexcept>
@@ -103,12 +105,12 @@
 #include <tuple>
 #include <optional>
 #include <format>
+#include <span>
 #include <glad/gl.h>
 #include <glm/glm.hpp>
 #include <glm/gtc/type_ptr.hpp>
 
 #include "bitmap.hpp"
-#include "utils.hpp"
 
 #define GLWRAP_ITER_ARITH_TYPES(X)    \
     X(std::int32_t, GL_INT)           \
@@ -176,14 +178,20 @@ namespace glwrap
 
     //----------- buffers -------------------
 
+    class buffer_base abstract
+    {
+    public:
+        virtual ~buffer_base() = 0 {}
+    };
+
     template <typename T>
-    class buffer abstract
+    class buffer abstract : public buffer_base
     {
     public:
         buffer(T const *data, size_t length)
         {
             if (length > std::numeric_limits<GLsizei>::max())
-                throw std::invalid_argument(std::string("buffer data too large (") + std::to_string(length) + ")");
+                throw std::invalid_argument(std::format("buffer data too large ({})", length));
             count_ = static_cast<GLsizei>(length);
             ::glCreateBuffers(1, &this->handle_);
             ::glNamedBufferStorage(this->handle_, sizeof(T) * length, data, GL_DYNAMIC_STORAGE_BIT);
@@ -212,9 +220,10 @@ namespace glwrap
         void swap(buffer &other) noexcept
         {
             std::swap(handle_, other.handle_);
+            std::swap(count_, other.count_);
         }
 
-        ~buffer()
+        virtual ~buffer() override
         {
             if (handle_ != 0)
             {
@@ -256,7 +265,7 @@ namespace glwrap
     template <typename Index>
     class index_buffer final : public buffer<Index>
     {
-        static_assert(std::is_integral_v<Index>, "index must be integral type");
+        static_assert(std::is_integral_v<Index> && std::is_unsigned_v<Index>, "index must be unsigned integral type");
 
     public:
         using index_type = Index;
@@ -290,16 +299,37 @@ namespace glwrap
     class vertex_array final
     {
     public:
-        template <typename... Vertex>
-        explicit vertex_array(vertex_buffer<Vertex> &...buffers) : vertex_array()
+        // ----------- load from simple json -----------
+        // file content:
+        //     {
+        //         "position": [0,0,0,1,1,1,...], // group-by-3
+        //         "normal": [0,0,1,...] // group-by-3
+        //         "tex": [0.5,0.5,...]  // group-by-2
+        //         "index": [0,1,3,...]
+        //     }
+        static vertex_array load_simple_json(std::filesystem::path const &path);
+
+        vertex_array()
         {
-            (this->attach_vbuffer(buffers), ...);
+            ::glCreateVertexArrays(1, &handle_);
         }
 
-        template <typename Index, typename... Vertex>
-        explicit vertex_array(index_buffer<Index> &ibuffer, vertex_buffer<Vertex> &...buffers) : vertex_array(buffers...)
+        template <typename... VertexBuffers>
+        explicit vertex_array(VertexBuffers &&... buffers) : vertex_array()
+        {
+            this->attach_vbuffers(std::forward<VertexBuffers>(buffers)...);
+        }
+
+        template <typename Index, typename... VertexBuffers>
+        explicit vertex_array(index_buffer<Index> &ibuffer, VertexBuffers &&...vbuffers) : vertex_array(std::forward<VertexBuffers>(vbuffers)...)
         {
             this->set_ibuffer(ibuffer);
+        }
+
+        template <typename Index, typename... VertexBuffers>
+        explicit vertex_array(index_buffer<Index> &&moved_ibuffer, VertexBuffers &&...vbuffers) : vertex_array(std::forward<VertexBuffers>(vbuffers)...)
+        {
+            this->set_ibuffer(std::move(moved_ibuffer));
         }
 
         vertex_array(vertex_array &) = delete;
@@ -324,7 +354,8 @@ namespace glwrap
         {
             std::swap(handle_, other.handle_);
             std::swap(vbuffers_, other.vbuffers_);
-            std::swap(count_, other.count_);
+            std::swap(vcount_, other.vcount_);
+            std::swap(icount_, other.icount_);
             std::swap(ibuffer_, other.ibuffer_);
             std::swap(index_type_, other.index_type_);
             std::swap(index_size_, other.index_size_);
@@ -363,7 +394,18 @@ namespace glwrap
 
         void draw(draw_mode mode)
         {
-            draw(mode, 0, count_);
+            if (ibuffer_.has_value())
+            {
+                draw(mode, 0, icount_);
+            }
+            else 
+            {
+                if (!vcount_.has_value())
+                {
+                    throw std::runtime_error("Cannot draw empty vertex_array");
+                }
+                draw(mode, 0, vcount_.value());
+            }
         }
 
         void draw(draw_mode mode, GLint start, GLsizei count)
@@ -381,7 +423,18 @@ namespace glwrap
 
         void draw_instanced(draw_mode mode, GLsizei instance_count)
         {
-            draw_instanced(mode, 0, count_, instance_count);
+            if (ibuffer_.has_value())
+            {
+                draw_instanced(mode, 0, icount_, instance_count);
+            }
+            else
+            {
+                if (!vcount_.has_value())
+                {
+                    throw std::runtime_error("Cannot draw empty vertex_array");
+                }
+                draw_instanced(mode, 0, vcount_.value(), instance_count);
+            }
         }
 
         void draw_instanced(draw_mode mode, GLint start, GLsizei count, GLsizei instance_count)
@@ -400,38 +453,73 @@ namespace glwrap
         GLuint handle() const noexcept { return handle_; }
 
         template <typename Vertex>
-        size_t attach_vbuffer(vertex_buffer<Vertex> &vbuffer)
+        size_t attach_vbuffer(vertex_buffer<Vertex> & vbuffer)
         {
             auto index = vbuffers_.size();
-            count_ = std::min(count_, vbuffer.size());
+            vcount_ = vcount_.has_value() ? std::min(vcount_.value(), vbuffer.size()) : vbuffer.size();
             ::glVertexArrayVertexBuffer(this->handle_, static_cast<GLuint>(index), vbuffer.handle(), 0, sizeof(Vertex));
             vbuffers_.push_back(vbuffer.handle());
             return index;
         }
 
-    private:
-        vertex_array()
+        template <typename Vertex>
+        size_t attach_vbuffer(vertex_buffer<Vertex> && moved_vbuffer)
         {
-            ::glCreateVertexArrays(1, &handle_);
+            auto holded_ptr = std::make_unique<vertex_buffer<Vertex>>(std::move(moved_vbuffer));
+            auto index = vbuffers_.size();
+            vcount_ = vcount_.has_value() ? std::min(vcount_.value(), holded_ptr->size()) : holded_ptr->size();
+            ::glVertexArrayVertexBuffer(this->handle_, static_cast<GLuint>(index), holded_ptr->handle(), 0, sizeof(Vertex));
+            vbuffers_.push_back(holded_ptr->handle());
+            holded_buffers_.push_back(std::move(holded_ptr));
+            return index;
+        }
+
+        template <typename ...VertexBuffers>
+        void attach_vbuffers(VertexBuffers &&...vbuffers)
+        {
+            (attach_vbuffer(std::forward<VertexBuffers>(vbuffers)), ...);
         }
 
         template <typename Index>
         void set_ibuffer(index_buffer<Index> &ibuffer)
         {
-            assert(!ibuffer_.has_value());
+            if (ibuffer_.has_value())
+            {
+                throw std::runtime_error("Vertex array already has index buffer");
+            }
             ibuffer_ = ibuffer.handle();
             index_type_ = details::gl_type_traits<Index>::type;
             index_size_ = details::gl_type_traits<Index>::size;
-            count_ = ibuffer.size();
+            icount_ = ibuffer.size();
             ::glVertexArrayElementBuffer(handle_, ibuffer.handle());
         }
 
+        template <typename Index>
+        void set_ibuffer(index_buffer<Index> &&moved_ibuffer)
+        {
+            if (ibuffer_.has_value())
+            {
+                throw std::runtime_error("Vertex array already has index buffer");
+            }
+            auto holded_ptr = std::make_unique<index_buffer<Index>>(std::move(moved_ibuffer));
+            ibuffer_ = holded_ptr->handle();
+            index_type_ = details::gl_type_traits<Index>::type;
+            index_size_ = details::gl_type_traits<Index>::size;
+            icount_ = holded_ptr->size();
+            ::glVertexArrayElementBuffer(handle_, holded_ptr->handle());
+            holded_buffers_.push_back(std::move(holded_ptr));
+        }
+
+    private:
+
         GLuint handle_{};
         std::vector<GLuint> vbuffers_{};
-        GLsizei count_{std::numeric_limits<GLsizei>::max()};
+        std::optional<GLsizei> vcount_{};
+        GLsizei icount_{};
         std::optional<GLuint> ibuffer_{};
         GLenum index_type_{};
         size_t index_size_{};
+        std::vector<std::unique_ptr<buffer_base>> holded_buffers_{};
     };
 
     // ----------------- auto VAO for single vertex/index buffer ------------------------
@@ -513,27 +601,47 @@ namespace glwrap
             attrib_format_iter(varray, attrib_index, buffer_index + 1, std::forward<Rest &&>(rest)...);
         }
 
-        template <typename... T>
+        template <typename T>
+        struct extract_vertex_type{
+        };
+
+        template <typename T>
+        struct extract_vertex_type<vertex_buffer<T>>
+        {
+            using type = T;
+        };
+        template <typename T>
+        using extract_vertex_type_t = typename extract_vertex_type<T>::type;
+
+        template <typename... VertexBuffers>
         void auto_attrib_formats(vertex_array &varray)
         {
-            attrib_format_iter(varray, 0, 0, attrib_format_helper<T>{}...);
+            attrib_format_iter(varray, 0, 0, attrib_format_helper<extract_vertex_type_t<std::remove_cvref_t<VertexBuffers>>>{}...);
         }
 
     }
 
-    template <typename... Vertex>
-    auto auto_vertex_array(vertex_buffer<Vertex> &...vbuffer)
+    template <typename... VertexBuffers>
+    auto auto_vertex_array(VertexBuffers &&...vbuffers)
     {
-        auto varray = vertex_array(vbuffer...);
-        details::auto_attrib_formats<Vertex...>(varray);
+        auto varray = vertex_array(std::forward<VertexBuffers>(vbuffers)...);
+        details::auto_attrib_formats<VertexBuffers...>(varray);
         return varray;
     }
 
-    template <typename Index, typename... Vertex>
-    auto auto_vertex_array(index_buffer<Index> &ibuffer, vertex_buffer<Vertex> &...vbuffer)
+    template <typename Index, typename... VertexBuffers>
+    auto auto_vertex_array(index_buffer<Index> &ibuffer, VertexBuffers &&...vbuffers)
     {
-        auto varray = vertex_array(ibuffer, vbuffer...);
-        details::auto_attrib_formats<Vertex...>(varray);
+        auto varray = vertex_array(ibuffer, std::forward<VertexBuffers>(vbuffers)...);
+        details::auto_attrib_formats<VertexBuffers...>(varray);
+        return varray;
+    }
+
+    template <typename Index, typename... VertexBuffers>
+    auto auto_vertex_array(index_buffer<Index> &&moved_ibuffer, VertexBuffers &&...vbuffers)
+    {
+        auto varray = vertex_array(std::move(moved_ibuffer), std::forward<VertexBuffers>(vbuffers)...);
+        details::auto_attrib_formats<VertexBuffers...>(varray);
         return varray;
     }
 
@@ -591,11 +699,19 @@ namespace glwrap
             return shader(handle);
         }
 
-        static shader compile_file(const std::filesystem::path &path, shader_type type)
+        static shader compile_file(std::filesystem::path const& path, shader_type type)
         {
             try
             {
-                return compile(file::read_all_text(path), type);
+                std::ifstream f(path);
+                if (!f)
+                    throw std::invalid_argument("Open file " + path.string() + " failed");
+                f.seekg(0, std::ios_base::end);
+                auto size = f.tellg();
+                f.seekg(0, std::ios_base::beg);
+                std::string text(size, '\0');
+                f.read(text.data(), size);
+                return compile(text, type);
             }
             catch (std::exception &e)
             {
@@ -1101,11 +1217,19 @@ namespace glwrap
     {
     public:
         frame_buffer(GLsizei width, GLsizei height, GLsizei multisamples = 0, bool is_hdr = false)
-            : width_(width), height_(height), multisamples_(multisamples),
-              color_tex_(texture2d(width, height, multisamples, texture2d_format::rgba, is_hdr ? texture2d_elem_type::f16 : texture2d_elem_type::u8))
+            : frame_buffer(1, width, height, multisamples, is_hdr)
+        { }
+
+        frame_buffer(size_t target_count, GLsizei width, GLsizei height, GLsizei multisamples = 0, bool is_hdr = false)
+            : width_(width), height_(height), multisamples_(multisamples)
         {
             glCreateFramebuffers(1, &handle_);
-            glNamedFramebufferTexture(handle_, GL_COLOR_ATTACHMENT0, color_tex_.handle(), 0);
+
+            for (size_t i = 0; i < target_count; ++i)
+            {
+                color_textures_.push_back(texture2d(width, height, multisamples, texture2d_format::rgba, is_hdr ? texture2d_elem_type::f16 : texture2d_elem_type::u8));
+                glNamedFramebufferTexture(handle_, GL_COLOR_ATTACHMENT0 + i, color_textures_.back().handle(), 0);
+            }
 
             glCreateRenderbuffers(1, &render_buffer_handle_);
             if (multisamples != 0)
@@ -1147,7 +1271,7 @@ namespace glwrap
             std::swap(height_, other.height_);
             std::swap(multisamples_, other.multisamples_);
             std::swap(handle_, other.handle_);
-            std::swap(color_tex_, other.color_tex_);
+            std::swap(color_textures_, other.color_textures_);
             std::swap(render_buffer_handle_, other.render_buffer_handle_);
         }
 
@@ -1161,15 +1285,15 @@ namespace glwrap
             glBindFramebuffer(GL_FRAMEBUFFER, 0);
         }
 
-        void clear(glm::vec4 color = glm::vec4(0), float depth = 1)
+        void clear(glm::vec4 color = glm::vec4(0), float depth = 1, size_t draw_buffer = 0)
         {
-            clear_color(color);
+            clear_color(color, draw_buffer);
             clear_depth(depth);
         }
 
-        void clear_color(glm::vec4 color = glm::vec4(0))
+        void clear_color(glm::vec4 color = glm::vec4(0), size_t draw_buffer = 0)
         {
-            glClearNamedFramebufferfv(handle_, GL_COLOR, 0, value_ptr(color));
+            glClearNamedFramebufferfv(handle_, GL_COLOR, draw_buffer, value_ptr(color));
         }
 
         void clear_depth(float depth = 1)
@@ -1179,7 +1303,32 @@ namespace glwrap
 
         texture2d &color_texture()
         {
-            return color_tex_;
+            return color_textures_.at(0);
+        }
+
+        texture2d &color_texture_at(size_t index)
+        {
+            return color_textures_.at(index);
+        }
+
+        void draw_buffers(std::span<size_t> indexes)
+        {
+            std::vector<GLenum> dst{};
+            for (auto i : indexes)
+            {
+                dst.push_back(GL_COLOR_ATTACHMENT0 + i);
+            }
+            glNamedFramebufferDrawBuffers(handle_, dst.size(), dst.data());
+        }
+
+        void draw_buffers(std::initializer_list<size_t> indexes)
+        {
+            std::vector<GLenum> dst{};
+            for (auto i : indexes)
+            {
+                dst.push_back(GL_COLOR_ATTACHMENT0 + i);
+            }
+            glNamedFramebufferDrawBuffers(handle_, dst.size(), dst.data());
         }
 
         GLuint handle()
@@ -1194,15 +1343,19 @@ namespace glwrap
         GLsizei width_{0}, height_{0};
         GLsizei multisamples_{0};
         GLuint handle_{0};
-        texture2d color_tex_;
+        std::vector<texture2d> color_textures_;
         GLuint render_buffer_handle_{0};
     };
 
 }
 
 template <>
-struct std::formatter<glwrap::texture2d_format> : std::formatter<std::string>
+struct std::formatter<glwrap::texture2d_format>
 {
+    constexpr auto parse(std::format_parse_context &ctx)
+    {
+        return ctx.begin();
+    }
     auto format(glwrap::texture2d_format format, std::format_context &ctx)
     {
         auto &&out = ctx.out();
@@ -1223,8 +1376,12 @@ struct std::formatter<glwrap::texture2d_format> : std::formatter<std::string>
 };
 
 template <>
-struct std::formatter<glwrap::texture2d_elem_type> : std::formatter<std::string>
+struct std::formatter<glwrap::texture2d_elem_type>
 {
+    constexpr auto parse(std::format_parse_context &ctx)
+    {
+        return ctx.begin();
+    }
     auto format(glwrap::texture2d_elem_type format, std::format_context &ctx)
     {
         auto &&out = ctx.out();
@@ -1240,4 +1397,56 @@ struct std::formatter<glwrap::texture2d_elem_type> : std::formatter<std::string>
             throw std::invalid_argument(std::format("Invalid texture2d_format type: {}", static_cast<int>(format)));
         }
     }
+};
+
+template <>
+struct std::formatter<glm::vec1>
+{
+    constexpr auto parse(std::format_parse_context &ctx)
+    {
+        return ctx.begin();
+    }
+    auto format(glm::vec1 const &vec, std::format_context &ctx)
+    {
+        return std::format_to(ctx.out(), "({})", vec.x);
+    };
+};
+
+template <>
+struct std::formatter<glm::vec2>
+{
+    constexpr auto parse(std::format_parse_context &ctx)
+    {
+        return ctx.begin();
+    }
+    auto format(glm::vec2 const &vec, std::format_context &ctx)
+    {
+        return std::format_to(ctx.out(), "({}, {})", vec.x, vec.y);
+    };
+};
+
+template <>
+struct std::formatter<glm::vec3>
+{
+    constexpr auto parse(std::format_parse_context &ctx)
+    {
+        return ctx.begin();
+    }
+    auto format(glm::vec3 const &vec, std::format_context &ctx)
+    {
+        return std::format_to(ctx.out(), "({}, {}, {})", vec.x, vec.y, vec.z);
+    };
+};
+
+template <>
+struct std::formatter<glm::vec4>
+{
+    constexpr auto parse(std::format_parse_context &ctx)
+    {
+        return ctx.begin();
+    }
+    auto format(glm::vec4 const &vec, std::format_context &ctx)
+    {
+        return std::format_to(ctx.out(), "({}, {}, {}, {})", vec.x, vec.y, vec.z, vec.w);
+    };
 };

@@ -4,6 +4,7 @@
 #include <optional>
 #include <queue>
 #include <format>
+#include <functional>
 
 #include "glad/gl.h"
 #include "GLFW/glfw3.h"
@@ -21,6 +22,31 @@
 using namespace glwrap;
 using namespace std::literals;
 
+using example_creator = std::function<std::unique_ptr<example>()>;
+std::unique_ptr<example> create_backpack();
+std::unique_ptr<example> create_nanosuit_explode();
+std::unique_ptr<example> create_asteroids();
+std::unique_ptr<example> create_asteroids_instanced();
+std::unique_ptr<example> create_normal_map();
+std::unique_ptr<example> create_parallax_map();
+std::unique_ptr<example> create_ldr();
+std::unique_ptr<example> create_hdr();
+std::unique_ptr<example> create_bloom();
+inline std::vector<std::tuple<std::string_view, example_creator>> get_examples()
+{
+    return {
+        {"model load", create_backpack},
+        {"explode (geometry shader)", create_nanosuit_explode},
+        {"asteroid field", create_asteroids},
+        {"asteroid field (instancing)", create_asteroids_instanced},
+        {"normal mapping", create_normal_map},
+        {"parallax mapping", create_parallax_map},
+        {"ldr", create_ldr},
+        {"hdr / tone mapping", create_hdr},
+        {"bloom", create_bloom},
+    };
+}
+
 // ----- window status ---------
 const int init_width = 1600;
 const int init_height = 1200;
@@ -35,15 +61,9 @@ GLint max_samples;
 
 void reset_frame_buffer()
 {
-    if (example_ptr->custom_render())
-    {
-        example_ptr->reset_frame_buffer(screen_width, screen_height);
-    }
-    else
-    {
-        fbuffer.reset();
-        fbuffer.emplace(screen_width, screen_height, multisamples, is_hdr);
-    }
+    example_ptr->reset_frame_buffer(screen_width, screen_height);
+    fbuffer.reset();
+    fbuffer.emplace(screen_width, screen_height, multisamples, is_hdr);
 }
 
 // ------------------------------
@@ -103,6 +123,10 @@ void key_callback(GLFWwindow *window, int key, int scancode, int action, int mod
                 multisamples = 0;
             std::cout << std::format("multisample: {}", multisamples) << std::endl;
             reset_frame_buffer();
+        }
+        else if (key == GLFW_KEY_SPACE)
+        {
+            example_ptr->on_switch();
         }
     }
 }
@@ -295,15 +319,14 @@ try
             glm::vec2 tex;
             quad_vertex_t(float x, float y, float u, float v) : pos(x, y), tex(u, v) {}
         };
-        auto quad_vbuffer = vertex_buffer<quad_vertex_t>{
+        auto quad_varray = auto_vertex_array(vertex_buffer<quad_vertex_t>{
             {-1.0f, 1.0f, 0.0f, 1.0f},
             {-1.0f, -1.0f, 0.0f, 0.0f},
             {1.0f, -1.0f, 1.0f, 0.0f},
             {-1.0f, 1.0f, 0.0f, 1.0f},
             {1.0f, -1.0f, 1.0f, 0.0f},
             {1.0f, 1.0f, 1.0f, 1.0f},
-        };
-        auto quad_varray = auto_vertex_array(quad_vbuffer);
+        });
         auto quad_program = shader_program(
             shader::compile_file("shaders/base/fbuffer_vs.glsl"sv, shader_type::vertex),
             shader::compile_file(is_hdr ? "shaders/base/fbuffer_fs_reinhard.glsl"sv : "shaders/base/fbuffer_fs.glsl"sv, shader_type::fragment));
@@ -322,7 +345,7 @@ try
             if (counted_frames == fps.capacity())
             {
                 counted_frames = 0;
-                glfwSetWindowTitle(window, std::format("LearnOpenGL - {} ({:.1f} fps)", example_name, fps.fps()).c_str());
+                glfwSetWindowTitle(window, std::format("LearnOpenGL - {} ({:.1f} fps, camera at {})", example_name, fps.fps(), main_camera.position()).c_str());
             }
 
             process_input(window);
@@ -336,16 +359,14 @@ try
                     fb.clear({0.2f, 0.3f, 0.3f, 1.0f});
                 }
                 else {
-                    fb.clear_depth();
+                    fb.clear();
                 }
             }
 
-            example_ptr->update();
             example_ptr->draw(proj_mat, main_camera);
 
-            frame_buffer::unbind_all();
-
             if (!example_ptr->custom_render()) {
+                frame_buffer::unbind_all();
                 glDisable(GL_DEPTH_TEST);
                 auto &fb = fbuffer.value();
                 fb.color_texture().bind_unit(0);

@@ -4,7 +4,6 @@
 using namespace glwrap;
 
 struct skybox::skybox_impl {
-    vertex_buffer<glm::vec3> vbuffer_;
     vertex_array varray_;
     cubemap cubemap_;
     shader_program program_;
@@ -12,51 +11,7 @@ struct skybox::skybox_impl {
     shader_uniform view_uniform_;
 
     skybox_impl(cubemap &&cubemap)
-        : vbuffer_{
-              // positions
-              glm::vec3(-1.0f, 1.0f, -1.0f),
-              glm::vec3(-1.0f, -1.0f, -1.0f),
-              glm::vec3(1.0f, -1.0f, -1.0f),
-              glm::vec3(1.0f, -1.0f, -1.0f),
-              glm::vec3(1.0f, 1.0f, -1.0f),
-              glm::vec3(-1.0f, 1.0f, -1.0f),
-
-              glm::vec3(-1.0f, -1.0f, 1.0f),
-              glm::vec3(-1.0f, -1.0f, -1.0f),
-              glm::vec3(-1.0f, 1.0f, -1.0f),
-              glm::vec3(-1.0f, 1.0f, -1.0f),
-              glm::vec3(-1.0f, 1.0f, 1.0f),
-              glm::vec3(-1.0f, -1.0f, 1.0f),
-
-              glm::vec3(1.0f, -1.0f, -1.0f),
-              glm::vec3(1.0f, -1.0f, 1.0f),
-              glm::vec3(1.0f, 1.0f, 1.0f),
-              glm::vec3(1.0f, 1.0f, 1.0f),
-              glm::vec3(1.0f, 1.0f, -1.0f),
-              glm::vec3(1.0f, -1.0f, -1.0f),
-
-              glm::vec3(-1.0f, -1.0f, 1.0f),
-              glm::vec3(-1.0f, 1.0f, 1.0f),
-              glm::vec3(1.0f, 1.0f, 1.0f),
-              glm::vec3(1.0f, 1.0f, 1.0f),
-              glm::vec3(1.0f, -1.0f, 1.0f),
-              glm::vec3(-1.0f, -1.0f, 1.0f),
-
-              glm::vec3(-1.0f, 1.0f, -1.0f),
-              glm::vec3(1.0f, 1.0f, -1.0f),
-              glm::vec3(1.0f, 1.0f, 1.0f),
-              glm::vec3(1.0f, 1.0f, 1.0f),
-              glm::vec3(-1.0f, 1.0f, 1.0f),
-              glm::vec3(-1.0f, 1.0f, -1.0f),
-
-              glm::vec3(-1.0f, -1.0f, -1.0f),
-              glm::vec3(-1.0f, -1.0f, 1.0f),
-              glm::vec3(1.0f, -1.0f, -1.0f),
-              glm::vec3(1.0f, -1.0f, -1.0f),
-              glm::vec3(-1.0f, -1.0f, 1.0f),
-              glm::vec3(1.0f, -1.0f, 1.0f),
-          },
-          varray_{auto_vertex_array(vbuffer_)},
+        : varray_{vertex_array::load_simple_json("resources/simple_vertices/skybox.jsonc")},
           cubemap_{std::move(cubemap)},
           program_{shader::compile_file("shaders/base/skybox_vs.glsl", shader_type::vertex), shader::compile_file("shaders/base/skybox_fs.glsl", shader_type::fragment)}, proj_uniform_{program_.uniform("projection")}, view_uniform_{program_.uniform("view")}
     {

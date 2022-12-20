@@ -1,0 +1,169 @@
+#include "examples.hpp"
+#include "common_obj.hpp"
+
+using namespace std::literals;
+using namespace glwrap;
+
+class bloom final : public example
+{
+public:
+    bloom()
+    {
+        bloom_final_program_.uniform("screenTexture").set_int(0);
+        bloom_final_program_.uniform("blurredBright").set_int(1);
+        blur_program_.uniform("image").set_int(0);
+
+        for (auto i = 0u; i < lights_.size(); ++i)
+        {
+            auto &light = lights_[i];
+            wbox_.set_point_light(i, light.position, light.attenuation, light.color);
+            boxes_[i].set_render_bright(true);
+        }
+        wbox_.set_render_bright(true);
+    }
+
+    bool custom_render() override { return true; }
+
+    void reset_frame_buffer(GLsizei width, GLsizei height) override
+    {
+        fbuffer_.emplace(2, width, height, 0, true);
+        blur_buffer_.emplace(2, width, height, 0, true);
+    }
+
+    std::optional<camera> get_camera() override
+    {
+        return camera::look_at_camera(glm::vec3(5.1f, 0.1f, 5.4f));
+    }
+
+    void draw(glm::mat4 const &projection, camera &cam) override
+    {
+        auto period = 3.0f;
+        auto t = std::abs((std::fmod(timer::time(), (2 * period)) / period - 1));
+        exposure_.set_float(t * 5);
+
+        auto &fb = fbuffer_.value();
+
+        fb.bind();
+        fb.clear();
+        fb.clear_color(glm::vec4(0), 1);
+        fb.draw_buffers({0, 1});
+        auto view = cam.view();
+        for (auto &box : boxes_)
+        {
+            box.draw(projection, view);
+        }
+
+        wbox_.set_transform(glm::scale(glm::translate(glm::mat4(1), {0.0f, -1.0f, 0.0}), {12.5f, 0.5f, 12.5f}));
+        wbox_.draw(projection, cam);
+
+        wbox_.set_transform(glm::scale(glm::translate(glm::mat4(1), {0.0f, 1.5f, 0.0}), glm::vec3(0.5f)));
+        wbox_.draw(projection, cam);
+
+        wbox_.set_transform(glm::scale(glm::translate(glm::mat4(1), {2.0f, 0.0f, 1.0}), glm::vec3(0.5f)));
+        wbox_.draw(projection, cam);
+
+        wbox_.set_transform(glm::rotate(glm::translate(glm::mat4(1), {-1.0f, -1.0f, 2.0}), glm::radians(60.0f), glm::normalize(glm::vec3(1.0, 0.0, 1.0))));
+        wbox_.draw(projection, cam);
+
+        wbox_.set_transform(glm::rotate(glm::translate(glm::mat4(1), {0.0f, 2.7f, 4.0}), glm::radians(23.0f), glm::normalize(glm::vec3(1.0, 0.0, 1.0))));
+        wbox_.draw(projection, cam);
+
+        wbox_.set_transform(glm::rotate(glm::translate(glm::mat4(1), {-2.0f, 1.0f, -3.0}), glm::radians(124.0f), glm::normalize(glm::vec3(1.0, 0.0, 1.0))));
+        wbox_.draw(projection, cam);
+
+        wbox_.set_transform(glm::scale(glm::translate(glm::mat4(1), {-3.0f, 0.0f, 0.0}), glm::vec3(0.5f)));
+        wbox_.draw(projection, cam);
+
+        // blur bright
+        glDisable(GL_DEPTH_TEST);
+
+        quad_varray_.bind();
+        blur_program_.use();
+        auto &bb = blur_buffer_.value();
+        bb.clear_color();
+        bb.bind();
+
+        for (auto i = 0; i < 10; ++i)
+        {
+            auto &bright = i == 0 ? fb.color_texture_at(1) : bb.color_texture_at(0);
+            bright.bind_unit(0);
+            blur_horizonal_.set_bool(true);
+            bb.draw_buffers({1});
+            quad_varray_.draw(draw_mode::triangles);
+
+            bb.color_texture_at(1).bind_unit(0);
+            blur_horizonal_.set_bool(false);
+            bb.draw_buffers({0});
+            quad_varray_.draw(draw_mode::triangles);
+        }
+
+        // final
+        frame_buffer::unbind_all();
+        fb.color_texture_at(0).bind_unit(0);
+        bb.color_texture_at(0).bind_unit(1);
+        bloom_final_program_.use();
+        quad_varray_.draw(draw_mode::triangles);
+        glEnable(GL_DEPTH_TEST);
+    }
+
+private:
+    struct light_t
+    {
+        glm::vec3 position;
+        glm::vec3 attenuation;
+        glm::vec3 color;
+    };
+
+    std::array<light_t, 4> lights_{
+        light_t{{0.0f, 0.5f, 1.5f}, {1.0f, 0.22f, 0.20f}, {5.0f, 5.0f, 5.0f}},
+        light_t{{-4.0f, 0.5f, -3.0f}, {1.0f, 0.22f, 0.20f}, {10.0f, 0.0f, 0.0f}},
+        light_t{{3.0f, 0.5f, 1.0f}, {1.0f, 0.22f, 0.20f}, {0.0f, 0.0f, 15.0f}},
+        light_t{{-.8f, 2.4f, -1.0f}, {1.0f, 0.22f, 0.20f}, {0.0f, 5.0f, 0.0f}},
+    };
+
+    std::array<box, 4> boxes_{
+        box{lights_[0].position, glm::vec3(0.5f), glm::vec4(lights_[0].color, 1)},
+        box{lights_[1].position, glm::vec3(0.5f), glm::vec4(lights_[1].color, 1)},
+        box{lights_[2].position, glm::vec3(0.5f), glm::vec4(lights_[2].color, 1)},
+        box{lights_[3].position, glm::vec3(0.5f), glm::vec4(lights_[3].color, 1)},
+    };
+
+    wooden_box wbox_;
+
+    // -------- frame buffer --------------
+    struct quad_vertex_t
+    {
+        using vertex_desc_t = std::tuple<glm::vec2, glm::vec2>;
+        glm::vec2 pos;
+        glm::vec2 tex;
+        quad_vertex_t(float x, float y, float u, float v) : pos(x, y), tex(u, v) {}
+    };
+    vertex_array quad_varray_{auto_vertex_array(vertex_buffer<quad_vertex_t>{
+        {-1.0f, 1.0f, 0.0f, 1.0f},
+        {-1.0f, -1.0f, 0.0f, 0.0f},
+        {1.0f, -1.0f, 1.0f, 0.0f},
+        {-1.0f, 1.0f, 0.0f, 1.0f},
+        {1.0f, -1.0f, 1.0f, 0.0f},
+        {1.0f, 1.0f, 1.0f, 1.0f},
+    })};
+
+    shader_program blur_program_{
+        shader::compile_file("shaders/base/fbuffer_vs.glsl"sv, shader_type::vertex),
+        shader::compile_file("shaders/bloom_blur_fs.glsl"sv, shader_type::fragment)
+    };
+    shader_uniform blur_horizonal_{blur_program_.uniform("horizontal")};
+
+    shader_program bloom_final_program_{
+        shader::compile_file("shaders/base/fbuffer_vs.glsl"sv, shader_type::vertex),
+        shader::compile_file("shaders/bloom_final_fs.glsl"sv, shader_type::fragment)
+    };
+    shader_uniform exposure_{bloom_final_program_.uniform("exposure")};
+
+    std::optional<frame_buffer> fbuffer_{};
+    std::optional<frame_buffer> blur_buffer_{};
+};
+
+std::unique_ptr<example> create_bloom()
+{
+    return std::make_unique<bloom>();
+}
