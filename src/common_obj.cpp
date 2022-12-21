@@ -83,6 +83,16 @@ void box::set_size(glm::vec3 const &size) noexcept
     impl_->size_ = size;
 }
 
+glm::vec4 box::get_color() const noexcept
+{
+    return impl_->color_;
+}
+
+void box::set_color(glm::vec4 const &color) noexcept
+{
+    impl_->color_ = color;
+}
+
 void box::set_render_bright(bool value) noexcept
 {
     impl_->set_render_bright(value);

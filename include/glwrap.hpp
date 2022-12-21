@@ -20,7 +20,7 @@
 
     * Create buffers
     Use: vertex_buffer<Vertex> and index_buffer<Index>
-    Vertex can be any type, Index must be integral type.
+    Vertex can be any type, Index must be unsigned integral type.
     VBO will be deleted when lifetime ends.
     Examples:
     - auto vbuffer = vertex_buffer(box_vertices);
@@ -29,11 +29,13 @@
     * Create vertex array
     Use:   vertex_array(index_buffer<Index>&, vertex_buffer<Vertex>&...)
         or vertex_array(vertex_buffer<Vertex>&...)
+    Rvalue-referenced (moved) buffers are also allowed, in this situation, the moved buffer will be kept by the vertex array.
     If index_buffer<Index> is set then vbo.draw() will call glDrawElements, otherwise glDrawArrays.
     Vertex buffers indices will be in sequence (0, 1, 2, ...).
-    vertex_array will not keep any of the buffers. Please make sure that all the buffers are alive when using vertex_array.
+    vertex_array will not keep any of the lvalue-referenced buffers. Please make sure that all the buffers are alive when using vertex_array.
     Examples:
     - auto varray = vertex_array(ibuffer, vbuffer);
+    - auto varray = vertex_array(ibuffer<GLuint>{0, 1, 2, 1, 2, 3}, vertex_buffer<vert_t>{ ... });
 
     * Set vertex array attrib format:
     Use: vbo.enable_attrib(index) and vbo.attrib_format(attrib_index, vbo_index, size, type, normalizing, offset)
@@ -55,28 +57,28 @@
     Each element will leads to a attrib_format invocation in sequence.
     Examples:
     - Vertex type: int
-            attrib_format(attrib_index: 0, vbo_index: 0, size: 1, type: GL_INT, normalizing: GL_FALSE, offset: 0)
+        ==> attrib_format(attrib_index: 0, vbo_index: 0, size: 1, type: GL_INT, normalizing: GL_FALSE, offset: 0)
 
     - Vertex type: glm::vec3 (glm::vec<3, float, ...>)
-            attrib_format(attrib_index: 0, vbo_index: 0, size: 3, type: GL_FLOAT, normalizing: GL_FALSE, offset: 0)
+        ==> attrib_format(attrib_index: 0, vbo_index: 0, size: 3, type: GL_FLOAT, normalizing: GL_FALSE, offset: 0)
 
     - Vertex type: struct vertex_t {
                        using vertex_desc_t = std::tuple<glm::vec3, glm::vec2>;
                        glm::vec3 position;
                        glm::vec2 tex_coord;
                    };
-            attrib_format(attrib_index: 0, vbo_index: 0, size: 3, type: GL_FLOAT, normalizing: GL_FALSE, offset: 0)
+        ==> attrib_format(attrib_index: 0, vbo_index: 0, size: 3, type: GL_FLOAT, normalizing: GL_FALSE, offset: 0)
             attrib_format(attrib_index: 1, vbo_index: 0, size: 2, type: GL_FLOAT, normalizing: GL_FALSE, offset: 3 * sizeof(float))
             ** Cannot use std::tuple<glm::vec3, glm::vec2> as vertex type directly, since std::tuple is not standard-layout.
 
     - Vertex type: glm::vec3 (buffer 0), glm::vec2 (buffer 1)
-            attrib_format(attrib_index: 0, vbo_index: 0, size: 3, type: GL_FLOAT, normalizing: GL_FALSE, offset: 0)
+        ==> attrib_format(attrib_index: 0, vbo_index: 0, size: 3, type: GL_FLOAT, normalizing: GL_FALSE, offset: 0)
             attrib_format(attrib_index: 1, vbo_index: 1, size: 2, type: GL_FLOAT, normalizing: GL_FALSE, offset: 0)
 
     * Shaders and program
     Use:  shader::compile(code, type) or shader::compile_file(filename, type)
           shader_program(shaders...)
-    If shader_program get a rvalue referenced shader, it will keep that shader alive.
+    If shader_program receives an rvalue-referenced shader, it will keep that shader alive.
     For other shaders passed by lvalue reference, please keep them alive when using shader_program.
     Examples:
     - auto fs = shader::compile_file("my_fs.glsl", shader_type::fragment);
@@ -1215,20 +1217,26 @@ namespace glwrap
 
     class frame_buffer final
     {
-    public:
-        frame_buffer(GLsizei width, GLsizei height, GLsizei multisamples = 0, bool is_hdr = false)
-            : frame_buffer(1, width, height, multisamples, is_hdr)
-        { }
+    private:
+        static std::vector<texture2d> create_textures(size_t target_count, GLsizei width, GLsizei height, GLsizei multisamples, bool is_hdr)
+        {
+            std::vector<texture2d> result;
+            for (size_t i = 0; i < target_count; ++i)
+            {
+                result.emplace_back(width, height, multisamples, texture2d_format::rgba, is_hdr ? texture2d_elem_type::f16 : texture2d_elem_type::u8);
+            }
+            return result;
+        }
 
-        frame_buffer(size_t target_count, GLsizei width, GLsizei height, GLsizei multisamples = 0, bool is_hdr = false)
-            : width_(width), height_(height), multisamples_(multisamples)
+    public:
+        frame_buffer(std::vector<texture2d> &&textures, GLsizei width, GLsizei height, GLsizei multisamples = 0, bool is_hdr = false)
+            : width_(width), height_(height), multisamples_(multisamples), color_textures_(std::move(textures))
         {
             glCreateFramebuffers(1, &handle_);
 
-            for (size_t i = 0; i < target_count; ++i)
+            for (size_t i = 0; i < color_textures_.size(); ++i)
             {
-                color_textures_.push_back(texture2d(width, height, multisamples, texture2d_format::rgba, is_hdr ? texture2d_elem_type::f16 : texture2d_elem_type::u8));
-                glNamedFramebufferTexture(handle_, GL_COLOR_ATTACHMENT0 + i, color_textures_.back().handle(), 0);
+                glNamedFramebufferTexture(handle_, GL_COLOR_ATTACHMENT0 + i, color_textures_[i].handle(), 0);
             }
 
             glCreateRenderbuffers(1, &render_buffer_handle_);
@@ -1248,6 +1256,14 @@ namespace glwrap
                 throw gl_error(std::format("Frame buffer uncomplete, status = {}", status));
             }
         }
+
+        frame_buffer(GLsizei width, GLsizei height, GLsizei multisamples = 0, bool is_hdr = false)
+            : frame_buffer(1, width, height, multisamples, is_hdr)
+        { }
+
+        frame_buffer(size_t target_count, GLsizei width, GLsizei height, GLsizei multisamples = 0, bool is_hdr = false)
+            : frame_buffer(create_textures(target_count, width, height, multisamples, is_hdr), width, height, multisamples, is_hdr)
+        { }
 
         frame_buffer(frame_buffer const &) = delete;
         frame_buffer(frame_buffer &&other) noexcept { swap(other); }
@@ -1338,6 +1354,11 @@ namespace glwrap
 
         GLsizei width() const noexcept { return width_; }
         GLsizei height() const noexcept { return height_; }
+
+        void blit_to(frame_buffer& other, GLbitfield mask, GLenum filter = GL_NEAREST)
+        {
+            glBlitNamedFramebuffer(handle_, other.handle_, 0, 0, width_, height_, 0, 0, other.width_, other.height_, mask, filter);
+        }
 
     private:
         GLsizei width_{0}, height_{0};

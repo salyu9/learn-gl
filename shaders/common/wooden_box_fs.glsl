@@ -39,7 +39,7 @@ void main()
         vec3 lightDiff = lights[i].position - fsInput.position;
         float dist = length(lightDiff);
         vec3 lightDir = normalize(lightDiff);
-        vec3 light = lights[i].color / (lights[i].attenuation * vec3(1, dist, dist * dist));
+        vec3 light = lights[i].color / dot(lights[i].attenuation, vec3(1, dist, dist * dist));
 
         // --- diffuse ---
         result += light * max(dot(lightDir, normal), 0) * diffuse;

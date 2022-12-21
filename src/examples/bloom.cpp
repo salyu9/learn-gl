@@ -131,21 +131,7 @@ private:
     wooden_box wbox_;
 
     // -------- frame buffer --------------
-    struct quad_vertex_t
-    {
-        using vertex_desc_t = std::tuple<glm::vec2, glm::vec2>;
-        glm::vec2 pos;
-        glm::vec2 tex;
-        quad_vertex_t(float x, float y, float u, float v) : pos(x, y), tex(u, v) {}
-    };
-    vertex_array quad_varray_{auto_vertex_array(vertex_buffer<quad_vertex_t>{
-        {-1.0f, 1.0f, 0.0f, 1.0f},
-        {-1.0f, -1.0f, 0.0f, 0.0f},
-        {1.0f, -1.0f, 1.0f, 0.0f},
-        {-1.0f, 1.0f, 0.0f, 1.0f},
-        {1.0f, -1.0f, 1.0f, 0.0f},
-        {1.0f, 1.0f, 1.0f, 1.0f},
-    })};
+    vertex_array quad_varray_{utils::get_quad_varray()};
 
     shader_program blur_program_{
         shader::compile_file("shaders/base/fbuffer_vs.glsl"sv, shader_type::vertex),

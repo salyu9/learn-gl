@@ -8,7 +8,7 @@
 class box final
 {
 public:
-    box(glm::vec3 const &position, glm::vec3 const &size = glm::vec3(1, 1, 1), glm::vec4 const &color = glm::vec4(1, 1, 1, 1));
+    box(glm::vec3 const &position = glm::vec3(0), glm::vec3 const &size = glm::vec3(1, 1, 1), glm::vec4 const &color = glm::vec4(1, 1, 1, 1));
     box(box &&) noexcept;
     ~box();
     box &operator=(box &&other) noexcept;
@@ -19,6 +19,9 @@ public:
 
     glm::vec3 const& get_size() const noexcept;
     void set_size(glm::vec3 const &) noexcept;
+
+    glm::vec4 get_color() const noexcept;
+    void set_color(glm::vec4 const &color) noexcept;
 
     void set_render_bright(bool value) noexcept;
 

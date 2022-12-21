@@ -143,6 +143,63 @@ namespace utils
         return func();
     }
 
+    struct quad_vertex_t
+    {
+        using vertex_desc_t = std::tuple<glm::vec2, glm::vec2>;
+        glm::vec2 pos;
+        glm::vec2 tex;
+        quad_vertex_t(float x, float y, float u, float v) : pos(x, y), tex(u, v) {}
+    };
+
+    inline glwrap::vertex_array get_quad_varray() {
+        static auto quad_varray_ = auto_vertex_array(glwrap::vertex_buffer<quad_vertex_t>{
+            {-1.0f, 1.0f, 0.0f, 1.0f},
+            {-1.0f, -1.0f, 0.0f, 0.0f},
+            {1.0f, -1.0f, 1.0f, 0.0f},
+            {-1.0f, 1.0f, 0.0f, 1.0f},
+            {1.0f, -1.0f, 1.0f, 0.0f},
+            {1.0f, 1.0f, 1.0f, 1.0f},
+        });
+        return std::move(quad_varray_);
+    }
+
+    struct rotate_by_axis
+    {
+        rotate_by_axis(float radian, glm::vec3 const axis)
+            : radians{radians}, axis{glm::normalize(axis)}
+        { }
+        glm::quat to_quat() const
+        {
+            auto cos = std::cos(radians);
+            auto sin = std::sin(radians);
+            return glm::quat(cos, sin * axis);
+        }
+        glm::mat4 to_mat4() const
+        {
+            return glm::rotate(glm::mat4(1), radians, axis);
+        }
+
+    private:
+        float radians;
+        glm::vec3 axis;
+    };
+
+    inline glm::mat4 make_transform(
+        glm::vec3 const &position,
+        glm::vec3 const &scale,
+        rotate_by_axis const& rotation
+    )
+    {
+        return glm::scale(rotation.to_mat4() * glm::translate(glm::mat4(1), position), scale);
+    }
+
+    inline glm::mat4 make_transform(
+        glm::vec3 const &position = glm::vec3(0, 0, 0),
+        glm::vec3 const &scale = glm::vec3(1, 1, 1)
+    )
+    {
+        return glm::scale(glm::translate(glm::mat4(1), position), scale);
+    }
 }
 
 namespace timer

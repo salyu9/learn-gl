@@ -32,6 +32,7 @@ std::unique_ptr<example> create_parallax_map();
 std::unique_ptr<example> create_ldr();
 std::unique_ptr<example> create_hdr();
 std::unique_ptr<example> create_bloom();
+std::unique_ptr<example> create_deferred();
 inline std::vector<std::tuple<std::string_view, example_creator>> get_examples()
 {
     return {
@@ -44,6 +45,7 @@ inline std::vector<std::tuple<std::string_view, example_creator>> get_examples()
         {"ldr", create_ldr},
         {"hdr / tone mapping", create_hdr},
         {"bloom", create_bloom},
+        {"deferred shading", create_deferred}
     };
 }
 
@@ -243,21 +245,28 @@ void GLAPIENTRY message_callback(GLenum source,
     }
 }
 
-int main()
+int main(int argc, char* argv[])
 try
 {
     auto examples = get_examples();
-    std::cout << "Examples:" << std::endl;
-    auto i = 0;
-    for (auto & [name, _] : examples) {
-        std::cout << "    " << (++i) << ": " << name << std::endl;
-    }
-    std::cout << "Select [1~" << examples.size() << "]:" << std::flush;
+
     size_t in;
-    if (!(std::cin >> in) || in == 0 || in > examples.size())
-    {
-        std::cout << "Invalid input" << std::endl;
-        return EXIT_FAILURE;
+    if (argc >= 2) {
+        in = std::stoul(argv[1]);
+    }
+    else {
+        std::cout << "Examples:" << std::endl;
+        auto i = 0;
+        for (auto &[name, _] : examples)
+        {
+            std::cout << "    " << (++i) << ": " << name << std::endl;
+        }
+        std::cout << "Select [1~" << examples.size() << "]:" << std::flush;
+        if (!(std::cin >> in) || in == 0 || in > examples.size())
+        {
+            std::cout << "Invalid input" << std::endl;
+            return EXIT_FAILURE;
+        }
     }
     auto [example_name, example_creator] = examples[in - 1U];
 
