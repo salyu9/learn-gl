@@ -3,7 +3,7 @@
 in vec2 TexCoords;
 
 uniform sampler2D depthTexture;
-uniform sampler2D input0;
+uniform sampler2D inputNormal;
 uniform sampler2D input1;
 uniform sampler2D input2;
 
@@ -23,9 +23,9 @@ uniform mat4 inverseViewProjection;
 
 out vec4 FragColor;
 
-vec3 reconstructPosition()
+vec3 reconstructPosition(float projectedZ)
 {
-    float z = texture(depthTexture, TexCoords).r * 2.0 - 1.0; // z/w
+    float z = projectedZ * 2.0 - 1.0; // z/w
     vec2 xy = gl_FragCoord.xy / frameSize * 2.0 - 1.0;
     vec4 ndc = vec4(xy, z, 1);
     vec4 posInView = inverseViewProjection * ndc;
@@ -33,11 +33,17 @@ vec3 reconstructPosition()
     return position;
 }
 
+vec3 decodeOctahedral(vec2 n)
+{
+    float z = 1 - abs(n.x) - abs(n.y);
+    n = z >= 0 ? n : (1 - abs(n.yx)) * sign(n);
+    return normalize(vec3(n, z));
+}
+
 void main()
 {
-    vec3 position = reconstructPosition();
-
-    vec3 normal = normalize(texture(input0, TexCoords).rgb);
+    vec3 position = reconstructPosition(texture(depthTexture, TexCoords).r);
+    vec3 normal = decodeOctahedral(texture(inputNormal, TexCoords).rg);
     vec3 albedo = texture(input1, TexCoords).rgb;
     vec3 specular = texture(input2, TexCoords).rgb;
 

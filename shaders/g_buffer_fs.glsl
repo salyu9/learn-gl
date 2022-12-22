@@ -9,17 +9,23 @@ in VS_OUTPUT
 uniform sampler2D diffuseTexture;
 uniform sampler2D specularTexture;
 
-layout (location = 0) out vec3 outputNormal;
+layout (location = 0) out vec2 outputNormal;
 layout (location = 1) out vec3 outputAlbedo;
 layout (location = 2) out vec3 outputSpecular;
 
+vec2 encodeOctahedral(vec3 n)
+{
+    n /= abs(n.x) + abs(n.y) + abs(n.z);
+    return n.z >= 0 ? n.xy : (1 - abs(n.yx)) * sign(n.xy);
+}
+
 void main()
 {
-    vec3 normal = fsInput.normal;
+    vec3 normal = normalize(fsInput.normal);
     vec3 albedo = texture(diffuseTexture, fsInput.texCoords).rgb;
     vec3 specular = texture(specularTexture, fsInput.texCoords).rgb;
 
-    outputNormal = normal;
+    outputNormal = encodeOctahedral(normal);
     outputAlbedo = albedo;
     outputSpecular = specular;
 }

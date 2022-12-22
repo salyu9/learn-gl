@@ -16,10 +16,11 @@ public:
         g_buffer_program_.uniform("diffuseTexture").set_int(0);
         g_buffer_program_.uniform("specularTexture").set_int(1);
         g_lighting_program_.uniform("depthTexture").set_int(0);
-        g_lighting_program_.uniform("input0").set_int(1);
+        g_lighting_program_.uniform("inputNormal").set_int(1);
         g_lighting_program_.uniform("input1").set_int(2);
         g_lighting_program_.uniform("input2").set_int(3);
         g_debug_position_program_.uniform("depthTexture").set_int(0);
+        g_debug_normal_program_.uniform("normalTexture").set_int(0);
 
         for (int i = 0; i < lights_.size(); ++i)
         {
@@ -44,7 +45,7 @@ public:
     void reset_frame_buffer(GLsizei width, GLsizei height) override
     {
         std::vector<texture2d> colors;
-        colors.emplace_back(width, height, 0, GL_RG8_SNORM); // normal
+        colors.emplace_back(width, height, 0, GL_RG16_SNORM); // octahedral normal
         colors.emplace_back(width, height, 0, GL_RGB8); // albedo
         colors.emplace_back(width, height, 0, GL_RGB8); // specular
 
@@ -143,7 +144,7 @@ public:
         else if (draw_type_ == draw_type::normal)
         {
             frame_buffer::unbind_all();
-            post_program_.use();
+            g_debug_normal_program_.use();
             gb.color_texture_at(0).bind_unit(0);
             quad_varray_.bind();
             quad_varray_.draw(draw_mode::triangles);
@@ -205,6 +206,10 @@ private:
     };
     shader_uniform g_debug_frame_size_{g_debug_position_program_.uniform("frameSize")};
     shader_uniform g_debug_inverse_view_projection_{g_debug_position_program_.uniform("inverseViewProjection")};
+
+    shader_program g_debug_normal_program_{
+        shader::compile_file("shaders/base/fbuffer_vs.glsl"sv, shader_type::vertex),
+        shader::compile_file("shaders/g_debug_normal_fs.glsl"sv, shader_type::fragment)};
 
     model backpack_{model::load_file("resources/models/backpack_modified/backpack.obj",
                                      texture_type::diffuse | texture_type::normal | texture_type::specular)};
