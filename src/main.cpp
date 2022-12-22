@@ -57,6 +57,7 @@ int screen_height = init_height;
 bool is_hdr;
 std::unique_ptr<example> example_ptr;
 std::optional<frame_buffer> fbuffer{};
+std::optional<frame_buffer> postbuffer{};
 bool wireframe_mode = false;
 GLsizei multisamples = 0;
 GLint max_samples;
@@ -64,8 +65,13 @@ GLint max_samples;
 void reset_frame_buffer()
 {
     example_ptr->reset_frame_buffer(screen_width, screen_height);
-    fbuffer.reset();
     fbuffer.emplace(screen_width, screen_height, multisamples, is_hdr);
+    if (multisamples > 0) {
+        postbuffer.emplace(screen_width, screen_height, 0, is_hdr);
+    }
+    else {
+        postbuffer.reset();
+    }
 }
 
 // ------------------------------
@@ -104,7 +110,6 @@ void key_callback(GLFWwindow *window, int key, int scancode, int action, int mod
         else if (key == GLFW_KEY_TAB)
         {
             wireframe_mode = !wireframe_mode;
-            glPolygonMode(GL_FRONT_AND_BACK, wireframe_mode ? GL_LINE : GL_FILL);
             std::cout << std::format("wireframe: {}", (wireframe_mode ? "on" : "off")) << std::endl;
         }
         else if (key == GLFW_KEY_EQUAL)
@@ -366,9 +371,11 @@ try
                 fb.bind();
                 if (wireframe_mode) {
                     fb.clear({0.2f, 0.3f, 0.3f, 1.0f});
+                    glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
                 }
                 else {
                     fb.clear();
+                    glPolygonMode(GL_FRONT_AND_BACK, GL_FILL);
                 }
             }
 
@@ -377,8 +384,16 @@ try
             if (!example_ptr->custom_render()) {
                 frame_buffer::unbind_all();
                 glDisable(GL_DEPTH_TEST);
+                glPolygonMode(GL_FRONT_AND_BACK, GL_FILL);
                 auto &fb = fbuffer.value();
-                fb.color_texture().bind_unit(0);
+                if (multisamples > 0) {
+                    auto & pb = postbuffer.value();
+                    fb.blit_to(pb, GL_COLOR_BUFFER_BIT);
+                    pb.color_texture().bind_unit(0);
+                }
+                else {
+                    fb.color_texture().bind_unit(0);
+                }
                 quad_varray.bind();
 
                 auto postprocessor_ptr = example_ptr->postprocessor_ptr();
