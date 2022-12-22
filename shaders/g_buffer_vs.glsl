@@ -11,7 +11,6 @@ uniform mat4 normalMat;
 
 out VS_OUTPUT
 {
-    vec3 position;
     vec3 normal;
     vec2 texCoords;
 } vsOutput;
@@ -20,7 +19,6 @@ void main()
 {
     gl_Position = projection * view * model * vec4(aPosition, 1);
 
-    vsOutput.position = (model * vec4(aPosition, 1)).xyz;
     vsOutput.normal = (normalMat * vec4(aNormal, 0)).xyz;
     vsOutput.texCoords = aTexCoords;
 }

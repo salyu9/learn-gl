@@ -779,6 +779,18 @@ namespace glwrap
             glProgramUniform1ui(program_handle_, location_, v);
         }
 
+        glm::vec2 get_vec2() const
+        {
+            glm::vec2 res;
+            glGetnUniformfv(program_handle_, location_, sizeof(res), value_ptr(res));
+            return res;
+        }
+
+        void set_vec2(glm::vec2 v)
+        {
+            glProgramUniform2fv(program_handle_, location_, 1, value_ptr(v));
+        }
+
         glm::vec3 get_vec3() const
         {
             glm::vec3 res;
@@ -945,9 +957,8 @@ namespace glwrap
     class texture2d final
     {
     public:
-        explicit texture2d(GLsizei width, GLsizei height, GLsizei multisamples = 0, texture2d_format format = texture2d_format::rgb, texture2d_elem_type elem_type = texture2d_elem_type::u8)
+        texture2d(GLsizei width, GLsizei height, GLsizei multisamples, GLenum internal_format)
         {
-            GLenum internal_format = to_internal_format(format, elem_type);
             if (multisamples == 0)
             {
                 glCreateTextures(GL_TEXTURE_2D, 1, &handle_);
@@ -964,8 +975,11 @@ namespace glwrap
             }
         }
 
-        explicit texture2d(void const *p, size_t size, bool srgb = false, texture2d_elem_type elem_type = texture2d_elem_type::u8,
-          texture2d_format format = texture2d_format::unspecified)
+        texture2d(GLsizei width, GLsizei height, GLsizei multisamples = 0, texture2d_format format = texture2d_format::rgb, texture2d_elem_type elem_type = texture2d_elem_type::u8)
+            : texture2d(width, height, multisamples, to_internal_format(format, elem_type))
+        { }
+
+        texture2d(void const *p, size_t size, bool srgb = false, texture2d_elem_type elem_type = texture2d_elem_type::u8, texture2d_format format = texture2d_format::unspecified)
         {
             auto required_channel = bitmap_channel::unspecified;
             if (format == texture2d_format::rgb)
@@ -1229,8 +1243,9 @@ namespace glwrap
         }
 
     public:
-        frame_buffer(std::vector<texture2d> &&textures, GLsizei width, GLsizei height, GLsizei multisamples = 0, bool is_hdr = false)
-            : width_(width), height_(height), multisamples_(multisamples), color_textures_(std::move(textures))
+        frame_buffer(std::vector<texture2d> &&textures, GLsizei width, GLsizei height, GLsizei multisamples = 0)
+            : width_(width), height_(height), multisamples_(multisamples), color_textures_(std::move(textures)),
+              depth_texture_(width, height, multisamples, GL_DEPTH_COMPONENT32F)
         {
             glCreateFramebuffers(1, &handle_);
 
@@ -1239,21 +1254,12 @@ namespace glwrap
                 glNamedFramebufferTexture(handle_, GL_COLOR_ATTACHMENT0 + i, color_textures_[i].handle(), 0);
             }
 
-            glCreateRenderbuffers(1, &render_buffer_handle_);
-            if (multisamples != 0)
-            {
-                glNamedRenderbufferStorageMultisample(render_buffer_handle_, multisamples, GL_DEPTH24_STENCIL8, width_, height_);
-            }
-            else
-            {
-                glNamedRenderbufferStorage(render_buffer_handle_, GL_DEPTH24_STENCIL8, width_, height_);
-            }
-            glNamedFramebufferRenderbuffer(handle_, GL_DEPTH_ATTACHMENT, GL_RENDERBUFFER, render_buffer_handle_);
+            glNamedFramebufferTexture(handle_, GL_DEPTH_ATTACHMENT, depth_texture_.handle(), 0);
 
             auto status = glCheckNamedFramebufferStatus(handle_, GL_FRAMEBUFFER);
             if (status != GL_FRAMEBUFFER_COMPLETE)
             {
-                throw gl_error(std::format("Frame buffer uncomplete, status = {}", status));
+                throw gl_error(std::format("Frame buffer uncomplete, status = {:x}", status));
             }
         }
 
@@ -1262,7 +1268,7 @@ namespace glwrap
         { }
 
         frame_buffer(size_t target_count, GLsizei width, GLsizei height, GLsizei multisamples = 0, bool is_hdr = false)
-            : frame_buffer(create_textures(target_count, width, height, multisamples, is_hdr), width, height, multisamples, is_hdr)
+            : frame_buffer(create_textures(target_count, width, height, multisamples, is_hdr), width, height, multisamples)
         { }
 
         frame_buffer(frame_buffer const &) = delete;
@@ -1277,7 +1283,6 @@ namespace glwrap
 
         ~frame_buffer()
         {
-            glDeleteRenderbuffers(1, &render_buffer_handle_);
             glDeleteFramebuffers(1, &handle_);
         }
 
@@ -1288,7 +1293,7 @@ namespace glwrap
             std::swap(multisamples_, other.multisamples_);
             std::swap(handle_, other.handle_);
             std::swap(color_textures_, other.color_textures_);
-            std::swap(render_buffer_handle_, other.render_buffer_handle_);
+            std::swap(depth_texture_, other.depth_texture_);
         }
 
         void bind()
@@ -1325,6 +1330,11 @@ namespace glwrap
         texture2d &color_texture_at(size_t index)
         {
             return color_textures_.at(index);
+        }
+
+        texture2d &depth_texture()
+        {
+            return depth_texture_;
         }
 
         void draw_buffers(std::span<size_t> indexes)
@@ -1365,9 +1375,8 @@ namespace glwrap
         GLsizei multisamples_{0};
         GLuint handle_{0};
         std::vector<texture2d> color_textures_;
-        GLuint render_buffer_handle_{0};
+        texture2d depth_texture_;
     };
-
 }
 
 template <>

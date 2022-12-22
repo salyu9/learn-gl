@@ -15,9 +15,11 @@ public:
     {
         g_buffer_program_.uniform("diffuseTexture").set_int(0);
         g_buffer_program_.uniform("specularTexture").set_int(1);
-        g_lighting_program_.uniform("input0").set_int(0);
-        g_lighting_program_.uniform("input1").set_int(1);
-        g_lighting_program_.uniform("input2").set_int(2);
+        g_lighting_program_.uniform("depthTexture").set_int(0);
+        g_lighting_program_.uniform("input0").set_int(1);
+        g_lighting_program_.uniform("input1").set_int(2);
+        g_lighting_program_.uniform("input2").set_int(3);
+        g_debug_position_program_.uniform("depthTexture").set_int(0);
 
         for (int i = 0; i < lights_.size(); ++i)
         {
@@ -41,36 +43,35 @@ public:
 
     void reset_frame_buffer(GLsizei width, GLsizei height) override
     {
-        g_buffer_.emplace(3, width, height, 0, true);
+        std::vector<texture2d> colors;
+        colors.emplace_back(width, height, 0, GL_RG8_SNORM); // normal
+        colors.emplace_back(width, height, 0, GL_RGB8); // albedo
+        colors.emplace_back(width, height, 0, GL_RGB8); // specular
+
+        g_buffer_.emplace(std::move(colors), width, height, 0);
         g_buffer_.value().draw_buffers({0, 1, 2});
 
         post_buffer_.emplace(width, height, 0, true);
     }
 
-    enum class draw_type
-    {
-        full,
-        base_color,
-        normal,
-
-    };
-
     void on_switch() override
     {
-
+        draw_type_ = draw_type_ == draw_type::specular ? draw_type::full : (static_cast<draw_type>(static_cast<int>(draw_type_) + 1));
+        std::cout << std::format("debug draw type: {}", static_cast<int>(draw_type_)) << std::endl;
     }
 
     void draw(glm::mat4 const& projection, camera & cam)
     {
+
         auto &gb = g_buffer_.value();
 
         // geometry pass
 
         gb.bind();
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-        gb.draw_buffers({0, 1, 2});
         g_buffer_program_.use();
 
+        glEnable(GL_DEPTH_TEST);
         auto view = cam.view();
         g_projection_.set_mat4(projection);
         g_view_.set_mat4(view);
@@ -95,38 +96,75 @@ public:
         pb.bind();
         pb.clear();
 
-        // lighting pass
-
         glDisable(GL_DEPTH_TEST);
-        gb.color_texture_at(0).bind_unit(0);
-        gb.color_texture_at(1).bind_unit(1);
-        gb.color_texture_at(2).bind_unit(2);
-        g_lighting_program_.use();
-        lighting_view_pos_.set_vec3(cam.position());
-        quad_varray_.bind();
-        quad_varray_.draw(draw_mode::triangles);
-
-        // draw light box
-
-        gb.blit_to(pb, GL_DEPTH_BUFFER_BIT);
-        glEnable(GL_DEPTH_TEST);
-        for (auto & light : lights_)
+        if (draw_type_ == draw_type::full)
         {
-            box_.set_position(light.position);
-            box_.set_color(glm::vec4(light.color, 1));
-            box_.draw(projection, view);
+            // lighting pass
+            gb.depth_texture().bind_unit(0);
+            gb.color_texture_at(0).bind_unit(1);
+            gb.color_texture_at(1).bind_unit(2);
+            gb.color_texture_at(2).bind_unit(3);
+            g_lighting_program_.use();
+            lighting_inverse_view_projection_.set_mat4(glm::inverse(projection * view));
+            lighting_view_pos_.set_vec3(cam.position());
+            lighting_frame_size_.set_vec2({gb.width(), gb.height()});
+            quad_varray_.bind();
+            quad_varray_.draw(draw_mode::triangles);
+
+            // draw light box
+            gb.blit_to(pb, GL_DEPTH_BUFFER_BIT);
+            glEnable(GL_DEPTH_TEST);
+            for (auto & light : lights_)
+            {
+                box_.set_position(light.position);
+                box_.set_color(glm::vec4(light.color, 1));
+                box_.draw(projection, view);
+            }
+
+            // post
+            glDisable(GL_DEPTH_TEST);
+            frame_buffer::unbind_all();
+            post_program_.use();
+            pb.color_texture().bind_unit(0);
+            quad_varray_.bind();
+            quad_varray_.draw(draw_mode::triangles);
+
+        }
+        else if (draw_type_ == draw_type::position)
+        {
+            frame_buffer::unbind_all();
+            g_debug_position_program_.use();
+            g_debug_inverse_view_projection_.set_mat4(glm::inverse(projection * view));
+            g_debug_frame_size_.set_vec2({gb.width(), gb.height()});
+            gb.depth_texture().bind_unit(0);
+            quad_varray_.bind();
+            quad_varray_.draw(draw_mode::triangles);
+        }
+        else if (draw_type_ == draw_type::normal)
+        {
+            frame_buffer::unbind_all();
+            post_program_.use();
+            gb.color_texture_at(0).bind_unit(0);
+            quad_varray_.bind();
+            quad_varray_.draw(draw_mode::triangles);
+        }
+        else if (draw_type_ == draw_type::albedo)
+        {
+            frame_buffer::unbind_all();
+            post_program_.use();
+            gb.color_texture_at(1).bind_unit(0);
+            quad_varray_.bind();
+            quad_varray_.draw(draw_mode::triangles);
+        }
+        else if (draw_type_ == draw_type::specular)
+        {
+            frame_buffer::unbind_all();
+            post_program_.use();
+            gb.color_texture_at(2).bind_unit(0);
+            quad_varray_.bind();
+            quad_varray_.draw(draw_mode::triangles);
         }
 
-        // post
-
-        glDisable(GL_DEPTH_TEST);
-        frame_buffer::unbind_all();
-        post_program_.use();
-        pb.color_texture().bind_unit(0);
-        quad_varray_.bind();
-        quad_varray_.draw(draw_mode::triangles);
-
-        glEnable(GL_DEPTH_TEST);
     }
 
 private:
@@ -158,6 +196,15 @@ private:
         shader::compile_file("shaders/g_lighting_fs.glsl"sv, shader_type::fragment)
     };
     shader_uniform lighting_view_pos_{g_lighting_program_.uniform("viewPos")};
+    shader_uniform lighting_frame_size_{g_lighting_program_.uniform("frameSize")};
+    shader_uniform lighting_inverse_view_projection_{g_lighting_program_.uniform("inverseViewProjection")};
+
+    shader_program g_debug_position_program_{
+        shader::compile_file("shaders/base/fbuffer_vs.glsl"sv, shader_type::vertex),
+        shader::compile_file("shaders/g_debug_position_fs.glsl"sv, shader_type::fragment)
+    };
+    shader_uniform g_debug_frame_size_{g_debug_position_program_.uniform("frameSize")};
+    shader_uniform g_debug_inverse_view_projection_{g_debug_position_program_.uniform("inverseViewProjection")};
 
     model backpack_{model::load_file("resources/models/backpack_modified/backpack.obj",
                                      texture_type::diffuse | texture_type::normal | texture_type::specular)};
@@ -216,6 +263,18 @@ private:
     std::optional<frame_buffer> post_buffer_{};
 
     vertex_array quad_varray_{utils::get_quad_varray()};
+
+    // ------- debug draw type --------
+
+    enum class draw_type : int
+    {
+        full = 0,
+        position = 1,
+        normal = 2,
+        albedo = 3,
+        specular = 4,
+    };
+    draw_type draw_type_{};
 };
 
 std::unique_ptr<example> create_deferred()

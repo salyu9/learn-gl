@@ -294,6 +294,7 @@ try
         return EXIT_FAILURE;
     }
     glfwMakeContextCurrent(window);
+    glfwSwapInterval(0);
 
     if (gladLoadGL(glfwGetProcAddress) == 0)
     {

@@ -82,6 +82,16 @@ public:
         return position_;
     }
 
+    float near_z()
+    {
+        return near_z_;
+    }
+
+    float far_z()
+    {
+        return far_z_;
+    }
+
     // Processes input received from any keyboard-like input system. Accepts input parameter in the form of camera defined ENUM (to abstract it from windowing systems)
     void process_keyboard(camera_movement::camera_movement direction, float delta_time, float speed_multiplier = 1) noexcept
     {
