@@ -2,12 +2,13 @@
 
 in VS_OUTPUT
 {
-    vec3 normal;
     vec2 texCoords;
+    mat3 tbn;
 } fsInput;
 
 uniform sampler2D diffuseTexture;
 uniform sampler2D specularTexture;
+uniform sampler2D normalTexture;
 
 layout (location = 0) out vec2 outputNormal;
 layout (location = 1) out vec3 outputAlbedo;
@@ -21,9 +22,9 @@ vec2 encodeOctahedral(vec3 n)
 
 void main()
 {
-    vec3 normal = normalize(fsInput.normal);
     vec3 albedo = texture(diffuseTexture, fsInput.texCoords).rgb;
     vec3 specular = texture(specularTexture, fsInput.texCoords).rgb;
+    vec3 normal = normalize(fsInput.tbn * (texture(normalTexture, fsInput.texCoords).rgb * 2 - 1));
 
     outputNormal = encodeOctahedral(normal);
     outputAlbedo = albedo;

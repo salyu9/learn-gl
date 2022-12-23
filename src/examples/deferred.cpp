@@ -15,10 +15,15 @@ public:
     {
         g_buffer_program_.uniform("diffuseTexture").set_int(0);
         g_buffer_program_.uniform("specularTexture").set_int(1);
+        g_buffer_program_.uniform("normalTexture").set_int(2);
         g_lighting_program_.uniform("depthTexture").set_int(0);
         g_lighting_program_.uniform("inputNormal").set_int(1);
         g_lighting_program_.uniform("input1").set_int(2);
         g_lighting_program_.uniform("input2").set_int(3);
+        g_lighting_accumulate_program_.uniform("depthTexture").set_int(0);
+        g_lighting_accumulate_program_.uniform("inputNormal").set_int(1);
+        g_lighting_accumulate_program_.uniform("input1").set_int(2);
+        g_lighting_accumulate_program_.uniform("input2").set_int(3);
         g_debug_position_program_.uniform("depthTexture").set_int(0);
         g_debug_normal_program_.uniform("normalTexture").set_int(0);
 
@@ -26,9 +31,7 @@ public:
         {
             auto& light = lights_[i];
             auto uniform = light_uniform_t{g_lighting_program_, i};
-            uniform.position.set_vec3(light.position);
-            uniform.attenuation.set_vec3(light.attenuation);
-            uniform.color.set_vec3(light.color);
+            uniform.set(light);
         }
         g_lighting_program_.uniform("lightCount").set_int(light_count);
         post_program_.uniform("screenTexture").set_int(0);
@@ -57,8 +60,12 @@ public:
 
     void on_switch() override
     {
-        draw_type_ = draw_type_ == draw_type::specular ? draw_type::full : (static_cast<draw_type>(static_cast<int>(draw_type_) + 1));
-        std::cout << std::format("debug draw type: {}", static_cast<int>(draw_type_)) << std::endl;
+        draw_type_ = static_cast<draw_type>(static_cast<int>(draw_type_) + 1);
+        if (draw_type_ == draw_type::max_value)
+        {
+            draw_type_ = draw_type::single_pass;
+        }
+        std::cout << std::format("debug draw type: {}", draw_type_names[static_cast<int>(draw_type_)]) << std::endl;
     }
 
     void draw(glm::mat4 const& projection, camera & cam)
@@ -87,6 +94,7 @@ public:
             {
                 mesh.get_texture(texture_type::diffuse).bind_unit(0);
                 mesh.get_texture(texture_type::specular).bind_unit(1);
+                mesh.get_texture(texture_type::normal).bind_unit(2);
                 auto & varray = mesh.get_varray();
                 varray.bind();
                 varray.draw(draw_mode::triangles);
@@ -98,7 +106,7 @@ public:
         pb.clear();
 
         glDisable(GL_DEPTH_TEST);
-        if (draw_type_ == draw_type::full)
+        if (draw_type_ == draw_type::single_pass)
         {
             // lighting pass
             gb.depth_texture().bind_unit(0);
@@ -129,7 +137,53 @@ public:
             pb.color_texture().bind_unit(0);
             quad_varray_.bind();
             quad_varray_.draw(draw_mode::triangles);
+        }
+        else if (draw_type_ == draw_type::accumulate)
+        {
+            // lighting pass
+            gb.depth_texture().bind_unit(0);
+            gb.color_texture_at(0).bind_unit(1);
+            gb.color_texture_at(1).bind_unit(2);
+            gb.color_texture_at(2).bind_unit(3);
+            g_lighting_accumulate_program_.use();
+            accumulate_projection_.set_mat4(projection);
+            accumulate_inverse_view_projection_.set_mat4(glm::inverse(projection * view));
+            accumulate_view_pos_.set_vec3(cam.position());
+            accumulate_frame_size_.set_vec2({gb.width(), gb.height()});
+            sphere_.bind();
+            glCullFace(GL_FRONT);
+            glEnable(GL_BLEND);
+            glBlendFunc(GL_ONE, GL_ONE);
+            for (auto &light : lights_)
+            {
+                auto model = glm::scale(glm::translate(glm::mat4(1), light.position), glm::vec3(light.range));
+                accumulate_view_model_.set_mat4(view * model);
+                accumulate_light_position_.set_vec3(light.position);
+                accumulate_light_attenuation_.set_vec3(light.attenuation);
+                accumulate_light_color_.set_vec3(light.color);
+                accumulate_light_range_.set_float(light.range);
+                sphere_.draw(draw_mode::triangles);
+            }
+            glCullFace(GL_BACK);
+            glDisable(GL_BLEND);
 
+            // draw light box
+            gb.blit_to(pb, GL_DEPTH_BUFFER_BIT);
+            glEnable(GL_DEPTH_TEST);
+            for (auto &light : lights_)
+            {
+                box_.set_position(light.position);
+                box_.set_color(glm::vec4(light.color, 1));
+                box_.draw(projection, view);
+            }
+
+            // post
+            glDisable(GL_DEPTH_TEST);
+            frame_buffer::unbind_all();
+            post_program_.use();
+            pb.color_texture().bind_unit(0);
+            quad_varray_.bind();
+            quad_varray_.draw(draw_mode::triangles);
         }
         else if (draw_type_ == draw_type::position)
         {
@@ -165,11 +219,54 @@ public:
             quad_varray_.bind();
             quad_varray_.draw(draw_mode::triangles);
         }
+        else if (draw_type_ == draw_type::light_range)
+        {
+            // lighting pass
+            pb.bind();
+            post_program_.use();
+            gb.color_texture_at(2).bind_unit(0);
+            quad_varray_.bind();
+            quad_varray_.draw(draw_mode::triangles);
+
+            // draw light box
+            gb.blit_to(pb, GL_DEPTH_BUFFER_BIT);
+            glEnable(GL_DEPTH_TEST);
+            glEnable(GL_BLEND);
+            glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+            glCullFace(GL_FRONT);
+            glDepthMask(GL_FALSE);
+            g_light_range_program_.uniform("projection").set_mat4(projection);
+            for (auto &light : lights_)
+            {
+                box_.set_position(light.position);
+                box_.set_color(glm::vec4(light.color, 1));
+                box_.draw(projection, view);
+                g_light_range_program_.use();
+
+                auto trans = glm::scale(glm::translate(glm::mat4(1), light.position), glm::vec3(light.range));
+                g_light_range_program_.uniform("viewModel").set_mat4(view * trans);
+                g_light_range_program_.uniform("color").set_vec4({light.color, 0.5f});
+                sphere_.bind();
+                sphere_.draw(draw_mode::triangles);
+            }
+            glDisable(GL_BLEND);
+            glCullFace(GL_BACK);
+            glDepthMask(GL_TRUE);
+
+            // post
+            glDisable(GL_DEPTH_TEST);
+            frame_buffer::unbind_all();
+            post_program_.use();
+            pb.color_texture().bind_unit(0);
+            quad_varray_.bind();
+            quad_varray_.draw(draw_mode::triangles);
+        }
 
     }
 
 private:
     box box_{glm::vec3(0), glm::vec3(0.125f)};
+    vertex_array sphere_{utils::create_uv_sphere(10, 10)};
 
     std::vector<glm::vec3> backpack_positions_{
         {-3.0f, -0.5f, -3.0f},
@@ -200,6 +297,19 @@ private:
     shader_uniform lighting_frame_size_{g_lighting_program_.uniform("frameSize")};
     shader_uniform lighting_inverse_view_projection_{g_lighting_program_.uniform("inverseViewProjection")};
 
+    shader_program g_lighting_accumulate_program_{
+        shader::compile_file("shaders/common/sphere_vs.glsl"sv, shader_type::vertex),
+        shader::compile_file("shaders/g_lighting_accumulate_fs.glsl"sv, shader_type::fragment)};
+    shader_uniform accumulate_projection_{g_lighting_accumulate_program_.uniform("projection")};
+    shader_uniform accumulate_view_model_{g_lighting_accumulate_program_.uniform("viewModel")};
+    shader_uniform accumulate_view_pos_{g_lighting_accumulate_program_.uniform("viewPos")};
+    shader_uniform accumulate_frame_size_{g_lighting_accumulate_program_.uniform("frameSize")};
+    shader_uniform accumulate_inverse_view_projection_{g_lighting_accumulate_program_.uniform("inverseViewProjection")};
+    shader_uniform accumulate_light_position_{g_lighting_accumulate_program_.uniform("light.position")};
+    shader_uniform accumulate_light_attenuation_{g_lighting_accumulate_program_.uniform("light.attenuation")};
+    shader_uniform accumulate_light_color_{g_lighting_accumulate_program_.uniform("light.color")};
+    shader_uniform accumulate_light_range_{g_lighting_accumulate_program_.uniform("light.range")};
+
     shader_program g_debug_position_program_{
         shader::compile_file("shaders/base/fbuffer_vs.glsl"sv, shader_type::vertex),
         shader::compile_file("shaders/g_debug_position_fs.glsl"sv, shader_type::fragment)
@@ -209,7 +319,13 @@ private:
 
     shader_program g_debug_normal_program_{
         shader::compile_file("shaders/base/fbuffer_vs.glsl"sv, shader_type::vertex),
-        shader::compile_file("shaders/g_debug_normal_fs.glsl"sv, shader_type::fragment)};
+        shader::compile_file("shaders/g_debug_normal_fs.glsl"sv, shader_type::fragment)
+    };
+
+    shader_program g_light_range_program_{
+        shader::compile_file("shaders/common/sphere_vs.glsl"sv, shader_type::vertex),
+        shader::compile_file("shaders/common/pure_color_fs.glsl"sv, shader_type::fragment)
+    };
 
     model backpack_{model::load_file("resources/models/backpack_modified/backpack.obj",
                                      texture_type::diffuse | texture_type::normal | texture_type::specular)};
@@ -224,6 +340,7 @@ private:
         glm::vec3 position;
         glm::vec3 attenuation;
         glm::vec3 color;
+        float range;
     };
 
     static constexpr uint32_t light_count = 32u;
@@ -235,14 +352,22 @@ private:
             dist = std::uniform_real_distribution<float>(0.0f, 1.0f)
         ]() mutable { return dist(mt); };
 
-        std::vector<light_t> lights;
+        auto constant = 1.0f;
+        auto linear = 0.7f;
+        auto quadratic = 1.8f;
 
+        std::vector<light_t> lights;
         for (auto i = 0u; i < light_count; ++i)
         {
+            auto color = utils::hsv(static_cast<int>(rng() * 360.0f), rng() * 0.5f + 0.5f, rng() * 0.5f + 1.5f);
+            auto color_max = std::max({color.r, color.g, color.b});
+            auto range = (-linear + std::sqrtf(linear * linear - 4 * quadratic * (constant - (256.0 / 5.0) * color_max))) / (2 * quadratic);
+
             lights.push_back(light_t{
                 .position = glm::vec3(rng() * 8.0 - 4.0, rng() * 7.0 - 4.0, rng() * 8.0 - 4.0),
-                .attenuation = {1.0f, 0.22f, 0.20f},
-                .color = glm::vec3(rng() * 0.75f + 0.25f, rng() * 0.75f + 0.25f, rng() * 0.75f + 0.25f)
+                .attenuation = glm::vec3(constant, linear, quadratic),
+                .color = color,
+                .range = range,
             });
         }
 
@@ -254,11 +379,21 @@ private:
         shader_uniform position;
         shader_uniform attenuation;
         shader_uniform color;
+        shader_uniform range;
         light_uniform_t(shader_program &p, int index)
             : position{p.uniform(std::format("lights[{}].position", index))},
               attenuation{p.uniform(std::format("lights[{}].attenuation", index))},
-              color{p.uniform(std::format("lights[{}].color", index))}
+              color{p.uniform(std::format("lights[{}].color", index))},
+              range{p.uniform(std::format("lights[{}].range", index))}
         { }
+
+        void set(light_t const& light)
+        {
+            position.set_vec3(light.position);
+            attenuation.set_vec3(light.attenuation);
+            color.set_vec3(light.color);
+            range.set_float(light.range);
+        }
     };
 
     // -------- frame buffer --------------
@@ -273,13 +408,25 @@ private:
 
     enum class draw_type : int
     {
-        full = 0,
-        position = 1,
-        normal = 2,
-        albedo = 3,
-        specular = 4,
+        single_pass,
+        accumulate,
+        position,
+        normal,
+        albedo,
+        specular,
+        light_range,
+        max_value
     };
     draw_type draw_type_{};
+    static constexpr std::array<std::string_view, 7> draw_type_names{
+        "single_pass",
+        "accumulate",
+        "position",
+        "normal",
+        "albedo",
+        "specular",
+        "light_range",
+    };
 };
 
 std::unique_ptr<example> create_deferred()

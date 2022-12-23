@@ -264,9 +264,9 @@ try
         auto i = 0;
         for (auto &[name, _] : examples)
         {
-            std::cout << "    " << (++i) << ": " << name << std::endl;
+            std::cout << std::format("    {:>2}: ", ++i) << name << std::endl;
         }
-        std::cout << "Select [1~" << examples.size() << "]:" << std::flush;
+        std::cout << std::format("Select [1~{}]:", examples.size()) << std::flush;
         if (!(std::cin >> in) || in == 0 || in > examples.size())
         {
             std::cout << "Invalid input" << std::endl;

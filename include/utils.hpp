@@ -6,6 +6,7 @@
 #include <filesystem>
 #include <chrono>
 #include <memory>
+#include <numbers>
 
 namespace utils
 {
@@ -151,17 +152,9 @@ namespace utils
         quad_vertex_t(float x, float y, float u, float v) : pos(x, y), tex(u, v) {}
     };
 
-    inline glwrap::vertex_array get_quad_varray() {
-        static auto quad_varray_ = auto_vertex_array(glwrap::vertex_buffer<quad_vertex_t>{
-            {-1.0f, 1.0f, 0.0f, 1.0f},
-            {-1.0f, -1.0f, 0.0f, 0.0f},
-            {1.0f, -1.0f, 1.0f, 0.0f},
-            {-1.0f, 1.0f, 0.0f, 1.0f},
-            {1.0f, -1.0f, 1.0f, 0.0f},
-            {1.0f, 1.0f, 1.0f, 1.0f},
-        });
-        return std::move(quad_varray_);
-    }
+    glwrap::vertex_array get_quad_varray();
+
+    glwrap::vertex_array create_uv_sphere(int slices, int stacks);
 
     struct rotate_by_axis
     {
@@ -200,6 +193,8 @@ namespace utils
     {
         return glm::scale(glm::translate(glm::mat4(1), position), scale);
     }
+
+    glm::vec3 hsv(int h, float s, float v);
 }
 
 namespace timer

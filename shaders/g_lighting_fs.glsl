@@ -12,12 +12,12 @@ struct Light
     vec3 position;
     vec3 attenuation;
     vec3 color;
+    float range;
 };
 uniform Light lights[32];
 uniform int lightCount;
 
 uniform vec3 viewPos;
-uniform float exposure;
 uniform vec2 frameSize;
 uniform mat4 inverseViewProjection;
 
@@ -52,13 +52,16 @@ void main()
     {
         vec3 lightDiff = lights[i].position - position;
         float dist = length(lightDiff);
-        vec3 light = lights[i].color / dot(lights[i].attenuation, vec3(1, dist, dist * dist));
+        if (dist > lights[i].range) {
+            continue;
+        }
+        vec3 I = lights[i].color / dot(lights[i].attenuation, vec3(1, dist, dist * dist));
         vec3 lightDir = normalize(lightDiff);
         vec3 viewDir = normalize(viewPos - position);
         vec3 h = normalize(lightDir + viewDir);
 
-        color += max(dot(lightDir, normal), 0) * albedo * light;
-        color += pow(max(dot(h, normal), 0), 32) * specular * light;
+        color += max(dot(lightDir, normal), 0) * albedo * I;
+        color += pow(max(dot(h, normal), 0), 32) * specular * I;
     }
 
     FragColor = vec4(color, 1);
