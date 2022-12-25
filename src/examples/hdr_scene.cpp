@@ -16,8 +16,7 @@ struct vert_t
 class hdr_scene final : public example
 {
 public:
-    hdr_scene(bool hdr)
-        : hdr_(hdr)
+    hdr_scene()
     {
         hdr_light_program_.uniform("lights[0].Position").set_vec3(glm::vec3(0.0f, 0.0f, 49.5f));
         hdr_light_program_.uniform("lights[1].Position").set_vec3(glm::vec3(-1.4f, -1.9f, 9.0f));
@@ -32,11 +31,23 @@ public:
         hdr_light_program_.uniform("diffuseTexture").set_int(0);
 
         hdr_light_program_.uniform("inverse_normals").set_bool(true);
+
+        glDisable(GL_CULL_FACE);
     }
 
     std::optional<camera> get_camera() override
     {
         return camera{glm::vec3(1.12f, 0.50f, -2.52f), glm::vec3(0, 1, 0), 100.0f, -7.7f};
+    }
+
+    void on_switch_state() override
+    {
+        hdr_ = !hdr_;
+    }
+
+    std::optional<std::string_view> get_state() override
+    {
+        return hdr_ ? "HDR" : "LDR";
     }
 
     void draw(glm::mat4 const& projection, camera & cam) override
@@ -60,8 +71,6 @@ public:
         model = glm::scale(model, glm::vec3(2.5f, 2.5f, 27.5f));
         model_.set_mat4(model);
 
-        view_pos_.set_vec3(cam.position());
-
         diffuse_.bind_unit(0);
 
         varray_.bind();
@@ -70,12 +79,13 @@ public:
 
     shader_program * postprocessor_ptr() override
     {
-        return hdr_ ? &postprocess_ : nullptr;
+        return hdr_ ? &postprocess_ : &postprocess_nonhdr_;
     }
 
     bool is_hdr() override { return true; }
 
-    bool hdr_;
+private:
+    bool hdr_{true};
 
     vertex_array varray_{vertex_array::load_simple_json("resources/simple_vertices/hdr_scene.jsonc")};
 
@@ -89,7 +99,11 @@ public:
     shader_uniform projection_{hdr_light_program_.uniform("projection")};
     shader_uniform view_{hdr_light_program_.uniform("view")};
     shader_uniform model_{hdr_light_program_.uniform("model")};
-    shader_uniform view_pos_{hdr_light_program_.uniform("viewPos")};
+
+    shader_program postprocess_nonhdr_{
+        shader::compile_file("shaders/base/fbuffer_vs.glsl", shader_type::vertex),
+        shader::compile_file("shaders/base/fbuffer_fs.glsl", shader_type::fragment),
+    };
 
     shader_program postprocess_{
         shader::compile_file("shaders/base/fbuffer_vs.glsl", shader_type::vertex),
@@ -98,12 +112,7 @@ public:
     shader_uniform exposure_{postprocess_.uniform("exposure")};
 };
 
-std::unique_ptr<example> create_ldr()
-{
-    return std::make_unique<hdr_scene>(false);
-}
-
 std::unique_ptr<example> create_hdr()
 {
-    return std::make_unique<hdr_scene>(true);
+    return std::make_unique<hdr_scene>();
 }

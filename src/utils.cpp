@@ -15,7 +15,7 @@ namespace utils
         });
     }
 
-    glwrap::vertex_array create_uv_sphere(int slices, int stacks)
+    glwrap::vertex_array create_uv_sphere(int slices, int stacks, bool full_information)
     {
         using namespace glwrap;
         if (slices < 4 || stacks < 3)
@@ -25,24 +25,41 @@ namespace utils
         constexpr auto pi = std::numbers::pi_v<float>;
 
         std::vector<glm::vec3> vertices{};
+        std::vector<glm::vec2> texcoords{};
+        std::vector<glm::vec4> tangents{};
         std::vector<GLuint> indices{};
 
-        vertices.emplace_back(0, 0, 1);
+        vertices.emplace_back(0, 1, 0);
+        if (full_information)
+        {
+            texcoords.emplace_back(0, 1);
+            tangents.emplace_back(1, 0, 0, 1);
+        }
 
         for (int i = 0; i < stacks - 1; ++i)
         {
             auto theta = pi * (i + 1) / stacks;
             for (int j = 0; j < slices; ++j)
             {
-                auto phi = 2.0f * pi * j / slices;
+                auto phi = -2.0f * pi * j / slices;
                 auto x = std::sin(theta) * std::cos(phi);
-                auto y = std::sin(theta) * std::sin(phi);
-                auto z = std::cos(theta);
+                auto y = std::cos(theta);
+                auto z = std::sin(theta) * std::sin(phi);
                 vertices.emplace_back(x, y, z);
+                if (full_information)
+                {
+                    texcoords.emplace_back(static_cast<float>(j) / slices, 1 - static_cast<float>(i + 1) / stacks);
+                    tangents.emplace_back(std::sin(phi), 0, -std::cos(phi), 1);
+                }
             }
         }
 
-        vertices.emplace_back(0, 0, -1);
+        vertices.emplace_back(0, -1, 0);
+        if (full_information)
+        {
+            texcoords.emplace_back(0, 0);
+            tangents.emplace_back(-1, 0, 0, 1);
+        }
 
         for (int j = 0; j < slices; ++j)
         {
@@ -71,11 +88,18 @@ namespace utils
         for (int j = 0; j < slices; ++j)
         {
             indices.push_back(sec_last + j);
-            indices.push_back(sec_last + (j + 1) % slices);
             indices.push_back(last);
+            indices.push_back(sec_last + (j + 1) % slices);
         }
 
-        return auto_vertex_array(index_buffer<GLuint>(indices), vertex_buffer<glm::vec3>(vertices));
+        return full_information
+                   ? auto_vertex_array(index_buffer<GLuint>(indices),
+                                       vertex_buffer<glm::vec3>(vertices), // position
+                                       vertex_buffer<glm::vec3>(vertices), // normal
+                                       vertex_buffer<glm::vec2>(texcoords),
+                                       vertex_buffer<glm::vec4>(tangents) // gltf2-style tangent
+                                       )
+                   : auto_vertex_array(index_buffer<GLuint>(indices), vertex_buffer<glm::vec3>(vertices));
     }
 
     glm::vec3 hsv(int h, float s, float v)

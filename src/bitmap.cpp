@@ -13,11 +13,11 @@
 #define STB_IMAGE_IMPLEMENTATION
 #include <stb_image.h>
 
-bitmap bitmap::from_memory(void const * p, size_t size, bitmap_channel required_channels, bool flip_vertically)
+bitmap bitmap::from_memory(std::byte const * p, size_t size, bitmap_channel required_channels, bool flip_vertically)
 {
     int width, height, channels;
     stbi_set_flip_vertically_on_load(flip_vertically);
-    auto puc = static_cast<stbi_uc const*>(p);
+    auto puc = reinterpret_cast<stbi_uc const *>(p);
     auto len = static_cast<int>(size);
     if (stbi_is_16_bit_from_memory(puc, len))
     {

@@ -33,6 +33,8 @@ std::unique_ptr<example> create_ldr();
 std::unique_ptr<example> create_hdr();
 std::unique_ptr<example> create_bloom();
 std::unique_ptr<example> create_deferred();
+std::unique_ptr<example> create_demo_sphere_pbr();
+//std::unique_ptr<example> create_basic_pbr();
 inline std::vector<std::tuple<std::string_view, example_creator>> get_examples()
 {
     return {
@@ -42,12 +44,14 @@ inline std::vector<std::tuple<std::string_view, example_creator>> get_examples()
         {"asteroid field (instancing)", create_asteroids_instanced},
         {"normal mapping", create_normal_map},
         {"parallax mapping", create_parallax_map},
-        {"ldr", create_ldr},
         {"hdr / tone mapping", create_hdr},
         {"bloom", create_bloom},
-        {"deferred shading", create_deferred}
+        {"deferred shading", create_deferred},
+        {"demo sphere pbr", create_demo_sphere_pbr},
+        //{"basic pbr", create_basic_pbr},
     };
 }
+std::string example_state;
 
 // ----- window status ---------
 const int init_width = 1600;
@@ -71,6 +75,19 @@ void reset_frame_buffer()
     }
     else {
         postbuffer.reset();
+    }
+}
+
+void refresh_example_state()
+{
+    const auto &state = example_ptr->get_state();
+    if (state.has_value())
+    {
+        example_state = std::format(" [{}] ", state.value());
+    }
+    else
+    {
+        example_state = {};
     }
 }
 
@@ -133,7 +150,8 @@ void key_callback(GLFWwindow *window, int key, int scancode, int action, int mod
         }
         else if (key == GLFW_KEY_SPACE)
         {
-            example_ptr->on_switch();
+            example_ptr->on_switch_state();
+            refresh_example_state();
         }
     }
 }
@@ -316,6 +334,8 @@ try
     glEnable(GL_DEBUG_OUTPUT);
     glDebugMessageCallback(message_callback, nullptr);
 
+    glEnable(GL_CULL_FACE);
+
     // timer::update();
     utils::fps_counter<60> fps(timer::time());
     int counted_frames = 0;
@@ -323,6 +343,7 @@ try
     try
     {
         example_ptr = example_creator();
+        refresh_example_state();
         is_hdr = example_ptr->is_hdr();
         framebuffer_size_callback(window, init_width, init_height);
 
@@ -360,7 +381,14 @@ try
             if (counted_frames == fps.capacity())
             {
                 counted_frames = 0;
-                glfwSetWindowTitle(window, std::format("LearnOpenGL - {} ({:.1f} fps, camera at {})", example_name, fps.fps(), main_camera.position()).c_str());
+                glfwSetWindowTitle(window, std::format("LearnOpenGL - {}{} ({:.1f} fps, camera at {}, yaw={:.1f}, pitch={:.1f})",
+                   example_name,
+                   example_state,
+                   fps.fps(),
+                   main_camera.position(),
+                   main_camera.yaw(),
+                   main_camera.pitch()
+                ).c_str());
             }
 
             process_input(window);

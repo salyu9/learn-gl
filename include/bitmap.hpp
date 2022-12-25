@@ -71,7 +71,7 @@ public:
         std::swap(max_mipmap_level_, other.max_mipmap_level_);
     }
 
-    static bitmap from_memory(void const *p, size_t size, bitmap_channel required_channels = bitmap_channel::unspecified, bool flip_vertically = false);
+    static bitmap from_memory(std::byte const *p, size_t size, bitmap_channel required_channels = bitmap_channel::unspecified, bool flip_vertically = false);
 
     static bitmap from_file(const char *filename, bitmap_channel required_channels = bitmap_channel::unspecified, bool flip_vertically = false);
     static bitmap from_file(std::filesystem::path const &filename, bitmap_channel required_channels = bitmap_channel::unspecified, bool flip_vertically = false)

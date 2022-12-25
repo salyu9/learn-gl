@@ -16,6 +16,7 @@ public:
           model_view_{program_.uniform("modelView")},
           diffuse0_{program_.uniform("textureDiffuse0")}
     {
+        glDisable(GL_CULL_FACE);
         program_.uniform("explodeDistance").set_float(2);
     }
 

@@ -979,7 +979,7 @@ namespace glwrap
             : texture2d(width, height, multisamples, to_internal_format(format, elem_type))
         { }
 
-        texture2d(void const *p, size_t size, bool srgb = false, texture2d_elem_type elem_type = texture2d_elem_type::u8, texture2d_format format = texture2d_format::unspecified)
+        texture2d(std::byte const *p, size_t size, bool srgb = false, texture2d_elem_type elem_type = texture2d_elem_type::u8, texture2d_format format = texture2d_format::unspecified)
         {
             auto required_channel = bitmap_channel::unspecified;
             if (format == texture2d_format::rgb)

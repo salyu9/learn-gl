@@ -14,7 +14,6 @@ struct Light {
 
 uniform Light lights[4];
 uniform sampler2D diffuseTexture;
-uniform vec3 viewPos;
 
 void main()
 {           

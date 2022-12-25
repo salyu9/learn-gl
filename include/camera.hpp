@@ -82,12 +82,22 @@ public:
         return position_;
     }
 
-    float near_z()
+    float yaw() const noexcept
+    {
+        return yaw_;
+    }
+
+    float pitch() const noexcept
+    {
+        return pitch_;
+    }
+
+    float near_z() const noexcept
     {
         return near_z_;
     }
 
-    float far_z()
+    float far_z() const noexcept
     {
         return far_z_;
     }

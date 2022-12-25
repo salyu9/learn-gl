@@ -190,7 +190,7 @@ namespace glwrap
                         {
                             throw std::runtime_error("Cannot load embeded texture");
                         }
-                        textures_.emplace_back(texture->pcData, texture->mWidth);
+                        textures_.emplace_back(reinterpret_cast<std::byte*>(texture->pcData), texture->mWidth);
                     }
                     else
                     {

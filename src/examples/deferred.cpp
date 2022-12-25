@@ -58,14 +58,18 @@ public:
         post_buffer_.emplace(width, height, 0, true);
     }
 
-    void on_switch() override
+    void on_switch_state() override
     {
         draw_type_ = static_cast<draw_type>(static_cast<int>(draw_type_) + 1);
         if (draw_type_ == draw_type::max_value)
         {
             draw_type_ = draw_type::single_pass;
         }
-        std::cout << std::format("debug draw type: {}", draw_type_names[static_cast<int>(draw_type_)]) << std::endl;
+    }
+
+    std::optional<std::string_view> get_state() override
+    {
+        return draw_type_names[static_cast<int>(draw_type_)];
     }
 
     void draw(glm::mat4 const& projection, camera & cam)

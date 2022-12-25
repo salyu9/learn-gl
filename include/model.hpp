@@ -26,6 +26,13 @@ namespace glwrap
         specular = 0x02,
         normal = 0x04,
         height = 0x08,
+
+        // pbr
+        albedo = 0x100,
+        metallic = 0x200,
+        roughness = 0x400,
+        occlusion = 0x800,
+
     };
 
     inline texture_type operator|(texture_type a, texture_type b)

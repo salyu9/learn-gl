@@ -154,7 +154,11 @@ namespace utils
 
     glwrap::vertex_array get_quad_varray();
 
-    glwrap::vertex_array create_uv_sphere(int slices, int stacks);
+    /*! \brief Create UV sphere vertex_array
+     *         If full_information specified, also create normal/texcoords/tangent(GLTF2-style) buffer.
+     *         Otherwise only create positions.
+     */
+    glwrap::vertex_array create_uv_sphere(int slices, int stacks, bool full_information = false);
 
     struct rotate_by_axis
     {
