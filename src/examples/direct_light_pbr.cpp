@@ -1,15 +1,14 @@
 #include "examples.hpp"
-#include "skybox.hpp"
 #include "utils.hpp"
 #include "common_obj.hpp"
 
 using namespace glwrap;
 using namespace std::literals;
 
-class demo_sphere_pbr : public example
+class direct_light_pbr final : public example
 {
 public:
-    demo_sphere_pbr()
+    direct_light_pbr()
     {
         color_program_.uniform("albedo").set_vec3(glm::vec3(1, 0, 0));
         color_ao_.set_float(1);
@@ -184,7 +183,7 @@ private:
     texture2d ao_tex_{"resources/textures/rustediron/ao.png"};
 };
 
-std::unique_ptr<example> create_demo_sphere_pbr()
+std::unique_ptr<example> create_direct_light_pbr()
 {
-    return std::make_unique<demo_sphere_pbr>();
+    return std::make_unique<direct_light_pbr>();
 }

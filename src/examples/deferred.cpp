@@ -7,7 +7,7 @@
 using namespace glwrap;
 using namespace std::literals;
 
-class deferred : public example
+class deferred final : public example
 {
 public:
 
@@ -109,6 +109,8 @@ public:
         pb.bind();
         pb.clear();
 
+        auto &quad_varray = utils::get_quad_varray();
+
         glDisable(GL_DEPTH_TEST);
         if (draw_type_ == draw_type::single_pass)
         {
@@ -121,8 +123,8 @@ public:
             lighting_inverse_view_projection_.set_mat4(glm::inverse(projection * view));
             lighting_view_pos_.set_vec3(cam.position());
             lighting_frame_size_.set_vec2({gb.width(), gb.height()});
-            quad_varray_.bind();
-            quad_varray_.draw(draw_mode::triangles);
+            quad_varray.bind();
+            quad_varray.draw(draw_mode::triangles);
 
             // draw light box
             gb.blit_to(pb, GL_DEPTH_BUFFER_BIT);
@@ -139,8 +141,8 @@ public:
             frame_buffer::unbind_all();
             post_program_.use();
             pb.color_texture().bind_unit(0);
-            quad_varray_.bind();
-            quad_varray_.draw(draw_mode::triangles);
+            quad_varray.bind();
+            quad_varray.draw(draw_mode::triangles);
         }
         else if (draw_type_ == draw_type::accumulate)
         {
@@ -186,8 +188,8 @@ public:
             frame_buffer::unbind_all();
             post_program_.use();
             pb.color_texture().bind_unit(0);
-            quad_varray_.bind();
-            quad_varray_.draw(draw_mode::triangles);
+            quad_varray.bind();
+            quad_varray.draw(draw_mode::triangles);
         }
         else if (draw_type_ == draw_type::position)
         {
@@ -196,32 +198,32 @@ public:
             g_debug_inverse_view_projection_.set_mat4(glm::inverse(projection * view));
             g_debug_frame_size_.set_vec2({gb.width(), gb.height()});
             gb.depth_texture().bind_unit(0);
-            quad_varray_.bind();
-            quad_varray_.draw(draw_mode::triangles);
+            quad_varray.bind();
+            quad_varray.draw(draw_mode::triangles);
         }
         else if (draw_type_ == draw_type::normal)
         {
             frame_buffer::unbind_all();
             g_debug_normal_program_.use();
             gb.color_texture_at(0).bind_unit(0);
-            quad_varray_.bind();
-            quad_varray_.draw(draw_mode::triangles);
+            quad_varray.bind();
+            quad_varray.draw(draw_mode::triangles);
         }
         else if (draw_type_ == draw_type::albedo)
         {
             frame_buffer::unbind_all();
             post_program_.use();
             gb.color_texture_at(1).bind_unit(0);
-            quad_varray_.bind();
-            quad_varray_.draw(draw_mode::triangles);
+            quad_varray.bind();
+            quad_varray.draw(draw_mode::triangles);
         }
         else if (draw_type_ == draw_type::specular)
         {
             frame_buffer::unbind_all();
             post_program_.use();
             gb.color_texture_at(2).bind_unit(0);
-            quad_varray_.bind();
-            quad_varray_.draw(draw_mode::triangles);
+            quad_varray.bind();
+            quad_varray.draw(draw_mode::triangles);
         }
         else if (draw_type_ == draw_type::light_range)
         {
@@ -229,8 +231,8 @@ public:
             pb.bind();
             post_program_.use();
             gb.color_texture_at(2).bind_unit(0);
-            quad_varray_.bind();
-            quad_varray_.draw(draw_mode::triangles);
+            quad_varray.bind();
+            quad_varray.draw(draw_mode::triangles);
 
             // draw light box
             gb.blit_to(pb, GL_DEPTH_BUFFER_BIT);
@@ -262,8 +264,8 @@ public:
             frame_buffer::unbind_all();
             post_program_.use();
             pb.color_texture().bind_unit(0);
-            quad_varray_.bind();
-            quad_varray_.draw(draw_mode::triangles);
+            quad_varray.bind();
+            quad_varray.draw(draw_mode::triangles);
         }
 
     }
@@ -405,8 +407,6 @@ private:
     std::optional<frame_buffer> g_buffer_{};
 
     std::optional<frame_buffer> post_buffer_{};
-
-    vertex_array quad_varray_{utils::get_quad_varray()};
 
     // ------- debug draw type --------
 

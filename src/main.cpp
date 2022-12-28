@@ -29,26 +29,25 @@ std::unique_ptr<example> create_asteroids();
 std::unique_ptr<example> create_asteroids_instanced();
 std::unique_ptr<example> create_normal_map();
 std::unique_ptr<example> create_parallax_map();
-std::unique_ptr<example> create_ldr();
 std::unique_ptr<example> create_hdr();
 std::unique_ptr<example> create_bloom();
 std::unique_ptr<example> create_deferred();
-std::unique_ptr<example> create_demo_sphere_pbr();
-//std::unique_ptr<example> create_basic_pbr();
+std::unique_ptr<example> create_direct_light_pbr();
+std::unique_ptr<example> create_ibl_pbr();
 inline std::vector<std::tuple<std::string_view, example_creator>> get_examples()
 {
     return {
-        {"model load", create_backpack},
-        {"explode (geometry shader)", create_nanosuit_explode},
-        {"asteroid field", create_asteroids},
-        {"asteroid field (instancing)", create_asteroids_instanced},
-        {"normal mapping", create_normal_map},
-        {"parallax mapping", create_parallax_map},
-        {"hdr / tone mapping", create_hdr},
-        {"bloom", create_bloom},
-        {"deferred shading", create_deferred},
-        {"demo sphere pbr", create_demo_sphere_pbr},
-        //{"basic pbr", create_basic_pbr},
+        {"Model Loading", create_backpack},
+        {"Geometry Shader", create_nanosuit_explode},
+        {"Asteroid Field", create_asteroids},
+        {"Asteroid Field (Instancing)", create_asteroids_instanced},
+        {"Normal Mapping", create_normal_map},
+        {"Parallax Mapping", create_parallax_map},
+        {"HDR / Tone Mapping", create_hdr},
+        {"Bloom", create_bloom},
+        {"Deferred Shading", create_deferred},
+        {"Direct Light PBR", create_direct_light_pbr},
+        {"IBL PBR", create_ibl_pbr},
     };
 }
 std::string example_state;

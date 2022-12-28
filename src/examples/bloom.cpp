@@ -77,7 +77,9 @@ public:
         // blur bright
         glDisable(GL_DEPTH_TEST);
 
-        quad_varray_.bind();
+        auto &quad_varray = utils::get_quad_varray();
+
+        quad_varray.bind();
         blur_program_.use();
         auto &bb = blur_buffer_.value();
         bb.clear_color();
@@ -89,12 +91,12 @@ public:
             bright.bind_unit(0);
             blur_horizonal_.set_bool(true);
             bb.draw_buffers({1});
-            quad_varray_.draw(draw_mode::triangles);
+            quad_varray.draw(draw_mode::triangles);
 
             bb.color_texture_at(1).bind_unit(0);
             blur_horizonal_.set_bool(false);
             bb.draw_buffers({0});
-            quad_varray_.draw(draw_mode::triangles);
+            quad_varray.draw(draw_mode::triangles);
         }
 
         // final
@@ -102,7 +104,7 @@ public:
         fb.color_texture_at(0).bind_unit(0);
         bb.color_texture_at(0).bind_unit(1);
         bloom_final_program_.use();
-        quad_varray_.draw(draw_mode::triangles);
+        quad_varray.draw(draw_mode::triangles);
         glEnable(GL_DEPTH_TEST);
     }
 
@@ -131,7 +133,6 @@ private:
     wooden_box wbox_;
 
     // -------- frame buffer --------------
-    vertex_array quad_varray_{utils::get_quad_varray()};
 
     shader_program blur_program_{
         shader::compile_file("shaders/base/fbuffer_vs.glsl"sv, shader_type::vertex),

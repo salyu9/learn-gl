@@ -3,9 +3,9 @@
 
 namespace utils
 {
-    glwrap::vertex_array get_quad_varray()
+    glwrap::vertex_array& get_quad_varray()
     {
-        return glwrap::auto_vertex_array(glwrap::vertex_buffer<quad_vertex_t>{
+        static auto varray = glwrap::auto_vertex_array(glwrap::vertex_buffer<quad_vertex_t>{
             {-1.0f, 1.0f, 0.0f, 1.0f},
             {-1.0f, -1.0f, 0.0f, 0.0f},
             {1.0f, -1.0f, 1.0f, 0.0f},
@@ -13,6 +13,13 @@ namespace utils
             {1.0f, -1.0f, 1.0f, 0.0f},
             {1.0f, 1.0f, 1.0f, 1.0f},
         });
+        return varray;
+    }
+
+    glwrap::vertex_array& get_skybox()
+    {
+        static auto varray = glwrap::vertex_array::load_simple_json("resources/simple_vertices/skybox.jsonc");
+        return varray;
     }
 
     glwrap::vertex_array create_uv_sphere(int slices, int stacks, bool full_information)

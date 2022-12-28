@@ -152,7 +152,9 @@ namespace utils
         quad_vertex_t(float x, float y, float u, float v) : pos(x, y), tex(u, v) {}
     };
 
-    glwrap::vertex_array get_quad_varray();
+    glwrap::vertex_array& get_quad_varray();
+
+    glwrap::vertex_array& get_skybox();
 
     /*! \brief Create UV sphere vertex_array
      *         If full_information specified, also create normal/texcoords/tangent(GLTF2-style) buffer.
