@@ -654,6 +654,7 @@ namespace glwrap
         vertex = GL_VERTEX_SHADER,
         fragment = GL_FRAGMENT_SHADER,
         geometry = GL_GEOMETRY_SHADER,
+        compute = GL_COMPUTE_SHADER,
     };
 
     class shader final
@@ -1018,10 +1019,14 @@ namespace glwrap
             return handle_;
         }
 
+        GLsizei width() const noexcept { return width_; }
+        GLsizei height() const noexcept { return height_; }
+
     private:
         texture2d() {}
 
         GLuint handle_{0};
+        GLsizei width_{}, height_{};
 
         friend class frame_buffer;
     };
@@ -1046,6 +1051,8 @@ namespace glwrap
                    folder / ("back" + file_ext))
         { }
 
+        explicit cubemap(GLsizei size);
+
         cubemap(cubemap&& other) noexcept
         {
             this->swap(other);
@@ -1059,7 +1066,7 @@ namespace glwrap
             }
         }
 
-        static cubemap from_single_texture(texture2d const &texture, GLsizei size);
+        static cubemap from_single_texture(texture2d &texture, GLsizei size);
 
         cubemap& operator= (cubemap&& other) noexcept
         {
@@ -1070,6 +1077,8 @@ namespace glwrap
         void bind() { glBindTexture(GL_TEXTURE_CUBE_MAP, handle_); }
 
         void bind_unit(GLuint unit) { glBindTextureUnit(unit, handle_); }
+
+        void bind_write_image(GLuint unit) { glBindImageTexture(unit, handle_, 0, GL_TRUE, 0, GL_WRITE_ONLY, GL_RGBA32F); }
 
         GLuint handle() { return handle_; }
 

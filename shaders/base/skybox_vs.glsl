@@ -8,6 +8,6 @@ uniform mat4 view;
 
 void main()
 {
-    TexCoords = vec3(-aPos.x, aPos.y, aPos.z);
+    TexCoords = aPos;
     gl_Position = projection * view * vec4(aPos, 1.0);
 }

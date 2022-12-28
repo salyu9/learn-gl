@@ -16,6 +16,7 @@ uniform vec3 albedo;
 uniform float metalness;
 uniform float roughness;
 uniform float ao;
+uniform samplerCube diffuseEnvCube;
 
 struct Light
 {
@@ -51,7 +52,7 @@ float GKDirect(float alpha)
     return (alpha + 1) * (alpha + 1) / 8;
 }
 
-vec3 pbr(vec3 n, vec3 l, vec3 v, vec3 albedo, float metalness, float roughness)
+vec3 pbr(vec3 F0, vec3 n, vec3 l, vec3 v, vec3 albedo, float metalness, float roughness)
 {
     float roughness2 = roughness * roughness;
     vec3 h = normalize(l + v);
@@ -59,12 +60,12 @@ vec3 pbr(vec3 n, vec3 l, vec3 v, vec3 albedo, float metalness, float roughness)
     float nl = max(dot(n, l), 0);
     float nh = max(dot(n, h), 0);
     float hv = max(dot(h, v), 0);
-    vec3 F0 = mix(vec3(0.04), albedo, metalness);
-    vec3 num = SchlickFresnel(F0, hv)
+    vec3 F = SchlickFresnel(F0, hv);
+    vec3 num = F
      * TrowbridgeReitzNDF(nh, roughness2)
      * SmithGeometry(nl, nv, GKDirect(roughness));
 
-    vec3 kS = F0;
+    vec3 kS = F;
     vec3 kD = vec3(1.0) - kS;
     kD *= 1.0 - metalness;
 
@@ -76,20 +77,25 @@ vec3 pbr(vec3 n, vec3 l, vec3 v, vec3 albedo, float metalness, float roughness)
 void main()
 {
     vec3 n = normalize(fsIn.normal);
+    vec3 v = normalize(viewPos - fsIn.position);
 
+    vec3 F0 = mix(vec3(0.04), albedo, metalness);
     vec3 Lo = vec3(0, 0, 0);
     for (int i = 0; i < 4; ++i)
     {   
         vec3 lightVector = lights[i].position - fsIn.position;
         float dist = length(lightVector);
         vec3 l = normalize(lightVector);
-        vec3 v = normalize(viewPos - fsIn.position);
         vec3 Li = lights[i].flux / (dist * dist) * max(dot(n, l), 0);
 
-        Lo += pbr(n, l, v, albedo, metalness, roughness) * Li;
+        Lo += pbr(F0, n, l, v, albedo, metalness, roughness) * Li;
     }
-    vec3 ambient = vec3(0.03) * albedo * ao;
-    Lo += ambient;
+
+    // ambient - diffuse
+    vec3 kS = SchlickFresnel(F0, max(dot(n, v), 0)); 
+    vec3 kD = (vec3(1.0) - kS) * (1.0 - metalness);
+    vec3 diffuse  = texture(diffuseEnvCube, n).rgb * albedo;
+    Lo += kD * diffuse * ao;
 
     FragColor = vec4(Lo, 1);
 }

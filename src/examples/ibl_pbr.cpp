@@ -11,10 +11,28 @@ enum class draw_type
     final_texture,
     env,
     env_diffuse,
-    env_ss1,
-    env_ss2,
+    // env_ss1,
+    // env_ss2,
     max,
 };
+
+cubemap make_diffuse(cubemap & input, GLsizei size)
+{
+    static auto prog = shader_program{
+        shader::compile_file("shaders/compute/env_diffuse.glsl", shader_type::compute),
+    };
+
+    input.bind_unit(0);
+    cubemap c{size};
+    c.bind_write_image(1);
+
+    prog.use();
+
+    glDispatchCompute(size, size, 1);
+    glMemoryBarrier(GL_SHADER_IMAGE_ACCESS_BARRIER_BIT);
+
+    return c;
+}
 
 class ibl_pbr final : public example
 {
@@ -64,10 +82,10 @@ public:
             return "environment";
         case draw_type::env_diffuse:
             return "environment - diffuse";
-        case draw_type::env_ss1:
-            return "environment - ss1";
-        case draw_type::env_ss2:
-            return "environment - ss2";
+        // case draw_type::env_ss1:
+        //     return "environment - ss1";
+        // case draw_type::env_ss2:
+        //     return "environment - ss2";
         default:
             throw std::runtime_error(std::format("Invalid draw type: {}", static_cast<int>(draw_type_)));
         }
@@ -88,10 +106,13 @@ public:
 
         if (draw_type_ == draw_type::final_color)
         {
+            env_skybox_.draw(projection, view);
+
             color_program_.use();
             color_projection_.set_mat4(projection);
             color_view_uniform_.set_mat4(view);
             color_view_pos_.set_vec3(view_pos);
+            env_diffuse_.bind_unit(0);
 
             sphere_.bind();
             for (int i = 0; i < count; ++i)
@@ -112,6 +133,8 @@ public:
         }
         else if (draw_type_ == draw_type::final_texture)
         {
+            env_skybox_.draw(projection, view);
+
             texture_program_.use();
             texture_projection_.set_mat4(projection);
             texture_view_uniform_.set_mat4(view);
@@ -121,6 +144,7 @@ public:
             metallic_tex_.bind_unit(2);
             roughness_tex_.bind_unit(3);
             ao_tex_.bind_unit(4);
+            env_diffuse_.bind_unit(5);
 
             sphere_.bind();
             for (int i = 0; i < count; ++i)
@@ -139,29 +163,20 @@ public:
         }
         else if (draw_type_ == draw_type::env)
         {
-            glDepthMask(GL_FALSE);
-            skybox_program_.use();
-            skybox_program_.uniform("skybox").set_int(0);
-            skybox_projection_.set_mat4(projection);
-            skybox_view_.set_mat4(glm::mat4(glm::mat3(view)));
-            env_.bind_unit(0);
-            auto &varray = utils::get_skybox();
-            varray.bind();
-            varray.draw(draw_mode::triangles);
-            glDepthMask(GL_TRUE);
+            env_skybox_.draw(projection, view);
         }
         else if (draw_type_ == draw_type::env_diffuse)
         {
-
+            env_diffuse_skybox_.draw(projection, view);
         }
-        else if (draw_type_ == draw_type::env_ss1)
-        {
+        // else if (draw_type_ == draw_type::env_ss1)
+        // {
 
-        }
-        else if (draw_type_ == draw_type::env_ss2)
-        {
+        // }
+        // else if (draw_type_ == draw_type::env_ss2)
+        // {
 
-        }
+        // }
         else 
         {
             std::cout << "Invalid draw type" << std::endl;
@@ -251,13 +266,17 @@ private :
     texture2d roughness_tex_{"resources/textures/rustediron/roughness.png"};
     texture2d ao_tex_{"resources/textures/rustediron/ao.png"};
 
-    cubemap env_{cubemap::from_single_texture(texture2d{"resources/textures/Alexs_Apartment/Alexs_Apt_2k.hdr"}, 1024)};
-    shader_program skybox_program_{
-        shader::compile_file("shaders/base/skybox_vs.glsl", shader_type::vertex),
-        shader::compile_file("shaders/base/skybox_fs.glsl", shader_type::fragment)
+    shader_program quad_program_{
+        shader::compile_file("shaders/base/quad_vs.glsl", shader_type::vertex),
+        shader::compile_file("shaders/base/quad_fs.glsl", shader_type::fragment)
     };
-    shader_uniform skybox_projection_{skybox_program_.uniform("projection")};
-    shader_uniform skybox_view_{skybox_program_.uniform("view")};
+
+    texture2d env_tex_{"resources/textures/Alexs_Apartment/Alexs_Apt_2k.hdr"};
+    cubemap env_{cubemap::from_single_texture(env_tex_, 1024)};
+    skybox env_skybox_{env_};
+
+    cubemap env_diffuse_{make_diffuse(env_, 64)};
+    skybox env_diffuse_skybox_{env_diffuse_};
 };
 
 std::unique_ptr<example> create_ibl_pbr()

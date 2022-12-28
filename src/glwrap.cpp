@@ -56,7 +56,7 @@ GLenum to_internal_format(texture2d_format format, texture2d_elem_type elem_type
     return iter->second;
 }
 
-void create_texture_resources(GLuint & handle, bool srgb, texture2d_format format, texture2d_elem_type elem_type, bitmap &bmp)
+void create_texture_resources(GLuint & handle, bool srgb, texture2d_format format, texture2d_elem_type elem_type, bitmap &bmp, GLsizei &width, GLsizei &height)
 {
     if (format == texture2d_format::unspecified)
     {
@@ -92,9 +92,12 @@ void create_texture_resources(GLuint & handle, bool srgb, texture2d_format forma
     glTextureStorage2D(handle, bmp.max_mipmap_level(), to_internal_format(format, elem_type), bmp.width(), bmp.height());
     glTextureSubImage2D(handle, 0, 0, 0, bmp.width(), bmp.height(), to_image_format(format), get_bitmap_texture_type(bmp), bmp.pixels());
     glGenerateTextureMipmap(handle);
+    width = bmp.width();
+    height = bmp.height();
 }
 
 texture2d::texture2d(GLsizei width, GLsizei height, GLsizei multisamples, GLenum internal_format)
+    : width_{width}, height_{height}
 {
     if (multisamples == 0)
     {
@@ -130,7 +133,7 @@ texture2d::texture2d(std::byte const *p, size_t size, bool srgb, texture2d_elem_
     else if (format == texture2d_format::rgba)
         required_channel = bitmap_channel::rgba;
     auto bmp = bitmap::from_memory(p, size, required_channel, true);
-    create_texture_resources(handle_, srgb, format, elem_type, bmp);
+    create_texture_resources(handle_, srgb, format, elem_type, bmp, width_, height_);
 }
 
 texture2d::texture2d(std::filesystem::path const &filename, bool srgb, texture2d_elem_type elem_type, texture2d_format format)
@@ -141,7 +144,7 @@ texture2d::texture2d(std::filesystem::path const &filename, bool srgb, texture2d
     else if (format == texture2d_format::rgba)
         required_channel = bitmap_channel::rgba;
     auto bmp = bitmap::from_file(filename, required_channel, true);
-    create_texture_resources(handle_, srgb, format, elem_type, bmp);
+    create_texture_resources(handle_, srgb, format, elem_type, bmp, width_, height_);
 }
 
 // ----------------------- cubemap ------------------------------------
@@ -189,48 +192,39 @@ cubemap::cubemap(std::filesystem::path const &right,
     }
 }
 
-cubemap::cubemap() = default;
-
-cubemap cubemap::from_single_texture(texture2d const& texture, GLsizei size)
+cubemap::cubemap(GLsizei size)
 {
-    auto prog = shader_program{
-        shader::compile_file("shaders/base/skybox_vs.glsl", shader_type::vertex),
-        shader::compile_file("shaders/base/skybox_mapping_fs.glsl", shader_type::fragment),
-    };
-    // create cubemap & frame_buffer
-    GLuint cubemap_handle;
-    glCreateTextures(GL_TEXTURE_CUBE_MAP, 1, &cubemap_handle);
-    glTextureStorage2D(cubemap_handle, 1, GL_RGB32F, size, size);
-    glTextureParameteri(cubemap_handle, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-    glTextureParameteri(cubemap_handle, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
-    glTextureParameteri(cubemap_handle, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
-    glTextureParameteri(cubemap_handle, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
-    glTextureParameteri(cubemap_handle, GL_TEXTURE_WRAP_R, GL_CLAMP_TO_EDGE);
-    GLuint fb_handle;
-    glCreateFramebuffers(1, &fb_handle);
+    glCreateTextures(GL_TEXTURE_CUBE_MAP, 1, &handle_);
+    glTextureStorage2D(handle_, 1, GL_RGBA32F, size, size);
+    glTextureParameteri(handle_, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+    glTextureParameteri(handle_, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+    glTextureParameteri(handle_, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+    glTextureParameteri(handle_, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+    glTextureParameteri(handle_, GL_TEXTURE_WRAP_R, GL_CLAMP_TO_EDGE);
     auto err = glGetError();
     if (err != GL_NO_ERROR)
     {
         throw gl_error(std::format("Create cube map failed, gl error = {}", err));
     }
+}
 
-    glBindFramebuffer(GL_FRAMEBUFFER, fb_handle);
-    glDisable(GL_DEPTH_TEST);
-    glNamedFramebufferTexture(fb_handle, GL_COLOR_ATTACHMENT0, cubemap_handle, 0);
-    if (glCheckNamedFramebufferStatus(fb_handle, GL_FRAMEBUFFER) != GL_FRAMEBUFFER_COMPLETE)
-    {
-        throw gl_error("Cannot create complete frame buffer while creating cubemap from texture");
-    }
+cubemap::cubemap() = default;
+
+cubemap cubemap::from_single_texture(texture2d & texture, GLsizei size)
+{
+    static auto prog = shader_program{
+        shader::compile_file("shaders/compute/cubemap_mapping.glsl", shader_type::compute),
+    };
+
+    texture.bind_unit(0);
+    cubemap c{size};
+    c.bind_write_image(1);
+
     prog.use();
-    auto &varray = utils::get_skybox();
-    varray.bind();
-    varray.draw(draw_mode::triangles);
 
-    glBindFramebuffer(GL_FRAMEBUFFER, 0);
-    glDeleteFramebuffers(1, &fb_handle);
-    cubemap c;
-    c.handle_ = cubemap_handle;
-    
+    glDispatchCompute(size, size, 1);
+    glMemoryBarrier(GL_SHADER_IMAGE_ACCESS_BARRIER_BIT);
+
     return c;
 }
 
