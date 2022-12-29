@@ -232,3 +232,8 @@ namespace timer
         details::current_time = new_time;
     }
 }
+
+inline std::filesystem::path operator""_path(const char *str, size_t)
+{
+    return std::filesystem::path(str);
+}

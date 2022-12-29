@@ -11,13 +11,8 @@ class nanosuit_explode final : public example
 {
 public:
     nanosuit_explode()
-        : explode_{program_.uniform("explodeRatio")},
-          projection_{program_.uniform("projection")},
-          model_view_{program_.uniform("modelView")},
-          diffuse0_{program_.uniform("textureDiffuse0")}
     {
         glDisable(GL_CULL_FACE);
-        program_.uniform("explodeDistance").set_float(2);
     }
 
     std::optional<camera> get_camera() override
@@ -62,16 +57,17 @@ private:
     glwrap::skybox skybox_{glwrap::cubemap{"resources/cubemaps/skybox", ".jpg"}};
     glwrap::model model_{model::load_file("resources/models/crysis_nano_suit_2/scene.gltf", texture_type::diffuse)};
 
-    shader_program program_{
-        shader::compile_file("shaders/geometry/explode_vs.glsl", shader_type::vertex),
-        shader::compile_file("shaders/geometry/explode_fs.glsl", shader_type::fragment),
-        shader::compile_file("shaders/geometry/explode_gs.glsl", shader_type::geometry),
-    };
+    shader_program program_{make_vgf_program(
+        "shaders/geometry/explode_vs.glsl"_path,
+        "shaders/geometry/explode_gs.glsl"_path,
+        "shaders/geometry/explode_fs.glsl"_path,
+        "explodeDistance", 2.0f
+    )};
 
-    shader_uniform explode_;
-    shader_uniform projection_;
-    shader_uniform model_view_;
-    shader_uniform diffuse0_;
+    shader_uniform explode_{program_.uniform("explodeRatio")};
+    shader_uniform projection_{program_.uniform("projection")};
+    shader_uniform model_view_{program_.uniform("modelView")};
+    shader_uniform diffuse0_{program_.uniform("textureDiffuse0")};
 };
 
 std::unique_ptr<example> create_nanosuit_explode()

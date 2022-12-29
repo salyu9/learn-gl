@@ -21,8 +21,6 @@ class parallax_map final : public example
 public:
     parallax_map()
     {
-        light_position_.set_vec3(box_.get_position());
-
         glEnable(GL_CULL_FACE);
     }
 
@@ -66,15 +64,19 @@ public:
         varray_.bind();
         varray_.draw(draw_mode::triangles);
 
-        box_.draw(projection, view);
+        light_box_.draw(projection, view);
     }
 
     bool is_hdr() override { return true; }
 
-    shader_program program_{
-        shader::compile_file("shaders/parallax_map_vs.glsl", shader_type::vertex),
-        shader::compile_file("shaders/parallax_map_fs.glsl", shader_type::fragment),
-    };
+private:
+    box light_box_{glm::vec3(2, 3, -5), glm::vec3(0.2f, 0.2f, 0.2f)};
+
+    shader_program program_{make_vf_program(
+        "shaders/parallax_map_vs.glsl"_path,
+        "shaders/parallax_map_fs.glsl"_path,
+        "lightPosition", light_box_.get_position()
+    )};
     shader_uniform projection_{program_.uniform("projection")};
     shader_uniform model_mat_{program_.uniform("model")};
     shader_uniform view_mat_{program_.uniform("view")};
@@ -82,7 +84,6 @@ public:
     shader_uniform diffuse_sampler_{program_.uniform("diffuseTexture")};
     shader_uniform normal_sampler_{program_.uniform("normalTexture")};
     shader_uniform depth_sampler_{program_.uniform("depthTexture")};
-    shader_uniform light_position_{program_.uniform("lightPosition")};
     shader_uniform view_position_{program_.uniform("viewPosition")};
 
     texture2d diffuse_map1_{"resources/textures/bricks2.jpg"sv, true};
@@ -102,8 +103,6 @@ public:
             {glm::vec3(0, +5, +5), glm::vec3(1, 0, 0), glm::vec2(0, 1), glm::vec3(0, 0, -1), glm::vec3(0, 1, 0)},
         }
     )};
-
-    box box_{glm::vec3(2, 3, -5), glm::vec3(0.2f, 0.2f, 0.2f)};
 
 };
 

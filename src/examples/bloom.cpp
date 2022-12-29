@@ -9,8 +9,6 @@ class bloom final : public example
 public:
     bloom()
     {
-        bloom_final_program_.uniform("screenTexture").set_int(0);
-        bloom_final_program_.uniform("blurredBright").set_int(1);
         blur_program_.uniform("image").set_int(0);
 
         for (auto i = 0u; i < lights_.size(); ++i)
@@ -134,16 +132,18 @@ private:
 
     // -------- frame buffer --------------
 
-    shader_program blur_program_{
-        shader::compile_file("shaders/base/fbuffer_vs.glsl"sv, shader_type::vertex),
-        shader::compile_file("shaders/bloom_blur_fs.glsl"sv, shader_type::fragment)
-    };
+    shader_program blur_program_{make_vf_program(
+        "shaders/base/fbuffer_vs.glsl"_path,
+        "shaders/bloom_blur_fs.glsl"_path
+    )};
     shader_uniform blur_horizonal_{blur_program_.uniform("horizontal")};
 
-    shader_program bloom_final_program_{
-        shader::compile_file("shaders/base/fbuffer_vs.glsl"sv, shader_type::vertex),
-        shader::compile_file("shaders/bloom_final_fs.glsl"sv, shader_type::fragment)
-    };
+    shader_program bloom_final_program_{make_vf_program(
+        "shaders/base/fbuffer_vs.glsl"_path,
+        "shaders/bloom_final_fs.glsl"_path,
+        "screenTexture", 0,
+        "blurredBright", 1
+    )};
     shader_uniform exposure_{bloom_final_program_.uniform("exposure")};
 
     std::optional<frame_buffer> fbuffer_{};

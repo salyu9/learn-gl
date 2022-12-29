@@ -52,7 +52,12 @@ float GKDirect(float alpha)
     return (alpha + 1) * (alpha + 1) / 8;
 }
 
-vec3 pbr(vec3 F0, vec3 n, vec3 l, vec3 v, vec3 albedo, float metalness, float roughness)
+float GKIBL(float alpha)
+{
+    return alpha * alpha / 2;
+}
+
+vec3 pbr(vec3 F0, vec3 n, vec3 l, vec3 v, vec3 albedo, float metalness, float roughness, float geometryK)
 {
     float roughness2 = roughness * roughness;
     vec3 h = normalize(l + v);
@@ -63,7 +68,7 @@ vec3 pbr(vec3 F0, vec3 n, vec3 l, vec3 v, vec3 albedo, float metalness, float ro
     vec3 F = SchlickFresnel(F0, hv);
     vec3 num = F
      * TrowbridgeReitzNDF(nh, roughness2)
-     * SmithGeometry(nl, nv, GKDirect(roughness));
+     * SmithGeometry(nl, nv, geometryK);
 
     vec3 kS = F;
     vec3 kD = vec3(1.0) - kS;
@@ -72,6 +77,11 @@ vec3 pbr(vec3 F0, vec3 n, vec3 l, vec3 v, vec3 albedo, float metalness, float ro
     float den = 4 * nl * nv + 0.0001;
     vec3 specular = num / den;
     return (kD * albedo / PI + specular) * nl;
+}
+
+vec3 SchlickFresnelRoughness(vec3 F0, float nv, float roughness)
+{
+    return F0 + (max(vec3(1 - roughness), F0) - F0) * pow(clamp(1 - nv, 0, 1), 5);
 }
 
 void main()
@@ -88,11 +98,12 @@ void main()
         vec3 l = normalize(lightVector);
         vec3 Li = lights[i].flux / (dist * dist) * max(dot(n, l), 0);
 
-        Lo += pbr(F0, n, l, v, albedo, metalness, roughness) * Li;
+        Lo += pbr(F0, n, l, v, albedo, metalness, roughness, GKDirect(roughness)) * Li;
     }
 
     // ambient - diffuse
-    vec3 kS = SchlickFresnel(F0, max(dot(n, v), 0)); 
+    vec3 kS = SchlickFresnelRoughness(F0, max(dot(n, v), 0), roughness);
+    //vec3 kS = SchlickFresnel(F0, max(dot(n, v), 0));
     vec3 kD = (vec3(1.0) - kS) * (1.0 - metalness);
     vec3 diffuse  = texture(diffuseEnvCube, n).rgb * albedo;
     Lo += kD * diffuse * ao;

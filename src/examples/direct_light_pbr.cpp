@@ -10,9 +10,6 @@ class direct_light_pbr final : public example
 public:
     direct_light_pbr()
     {
-        color_program_.uniform("albedo").set_vec3(glm::vec3(1, 0, 0));
-        color_ao_.set_float(1);
-
         for (auto i = 0u; i < lights_.size(); ++i)
         {
             auto color_light = light_uniform_t{color_program_, i};
@@ -21,13 +18,6 @@ public:
             auto texture_light = light_uniform_t{texture_program_, i};
             texture_light.set(lights_[i].position, lights_[i].flux);
         }
-
-        texture_program_.uniform("albedoTexture").set_int(0);
-        texture_program_.uniform("normalTexture").set_int(1);
-        texture_program_.uniform("metallicTexture").set_int(2);
-        texture_program_.uniform("roughnessTexture").set_int(3);
-        texture_program_.uniform("aoTexture").set_int(4);
-
     }
 
     bool is_hdr() override { return true; }
@@ -154,10 +144,12 @@ private:
 
     vertex_array sphere_{utils::create_uv_sphere(30, 30, true)};
 
-    shader_program color_program_{
-        shader::compile_file("shaders/pbr/sphere_pbr_color_vs.glsl", shader_type::vertex),
-        shader::compile_file("shaders/pbr/sphere_pbr_color_fs.glsl", shader_type::fragment),
-    };
+    shader_program color_program_{make_vf_program(
+        "shaders/pbr/sphere_pbr_color_vs.glsl"_path,
+        "shaders/pbr/sphere_pbr_color_fs.glsl"_path,
+        "albedo", glm::vec3(1, 0, 0),
+        "ao", 1.0f
+    )};
     shader_uniform color_projection_{color_program_.uniform("projection")};
     shader_uniform color_view_uniform_{color_program_.uniform("view")};
     shader_uniform color_model_uniform_{color_program_.uniform("model")};
@@ -165,12 +157,16 @@ private:
     shader_uniform color_view_pos_{color_program_.uniform("viewPos")};
     shader_uniform color_metalness_{color_program_.uniform("metalness")};
     shader_uniform color_roughness_{color_program_.uniform("roughness")};
-    shader_uniform color_ao_{color_program_.uniform("ao")};
 
-    shader_program texture_program_{
-        shader::compile_file("shaders/pbr/sphere_pbr_texture_vs.glsl", shader_type::vertex),
-        shader::compile_file("shaders/pbr/sphere_pbr_texture_fs.glsl", shader_type::fragment),
-    };
+    shader_program texture_program_{make_vf_program(
+        "shaders/pbr/sphere_pbr_texture_vs.glsl"_path,
+        "shaders/pbr/sphere_pbr_texture_fs.glsl"_path,
+        "albedoTexture", 0,
+        "normalTexture", 1,
+        "metallicTexture", 2,
+        "roughnessTexture", 3,
+        "aoTexture", 4
+    )};
     shader_uniform texture_projection_{texture_program_.uniform("projection")};
     shader_uniform texture_view_uniform_{texture_program_.uniform("view")};
     shader_uniform texture_model_uniform_{texture_program_.uniform("model")};

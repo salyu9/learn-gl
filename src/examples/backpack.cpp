@@ -11,13 +11,6 @@ using namespace glwrap;
 class backpack final : public example
 {
 public:
-    backpack()
-     : projection_{program_.uniform("projection")},
-       model_view_{program_.uniform("modelView")},
-       diffuse0_{program_.uniform("textureDiffuse0")}
-    {
-    }
-
     std::optional<camera> get_camera() override
     {
         return camera::look_at_camera(glm::vec3(-5.0f, 2.0f, 10.0f));
@@ -54,9 +47,9 @@ private:
         shader::compile_file("shaders/straight_fs.glsl", shader_type::fragment),
     };
 
-    shader_uniform projection_;
-    shader_uniform model_view_;
-    shader_uniform diffuse0_;
+    shader_uniform projection_{program_.uniform("projection")};
+    shader_uniform model_view_{program_.uniform("modelView")};
+    shader_uniform diffuse0_{program_.uniform("textureDiffuse0")};
 };
 
 std::unique_ptr<example> create_backpack()

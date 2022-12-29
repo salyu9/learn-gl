@@ -13,20 +13,6 @@ public:
 
     deferred()
     {
-        g_buffer_program_.uniform("diffuseTexture").set_int(0);
-        g_buffer_program_.uniform("specularTexture").set_int(1);
-        g_buffer_program_.uniform("normalTexture").set_int(2);
-        g_lighting_program_.uniform("depthTexture").set_int(0);
-        g_lighting_program_.uniform("inputNormal").set_int(1);
-        g_lighting_program_.uniform("input1").set_int(2);
-        g_lighting_program_.uniform("input2").set_int(3);
-        g_lighting_accumulate_program_.uniform("depthTexture").set_int(0);
-        g_lighting_accumulate_program_.uniform("inputNormal").set_int(1);
-        g_lighting_accumulate_program_.uniform("input1").set_int(2);
-        g_lighting_accumulate_program_.uniform("input2").set_int(3);
-        g_debug_position_program_.uniform("depthTexture").set_int(0);
-        g_debug_normal_program_.uniform("normalTexture").set_int(0);
-
         for (int i = 0; i < lights_.size(); ++i)
         {
             auto& light = lights_[i];
@@ -34,8 +20,6 @@ public:
             uniform.set(light);
         }
         g_lighting_program_.uniform("lightCount").set_int(light_count);
-        post_program_.uniform("screenTexture").set_int(0);
-        post_program_.uniform("exposure").set_float(1);
     }
 
     std::optional<camera> get_camera() override
@@ -286,26 +270,38 @@ private:
         {3.0f, -0.5f, 3.0f},
     };
 
-    shader_program g_buffer_program_{
-        shader::compile_file("shaders/g_buffer_vs.glsl"sv, shader_type::vertex),
-        shader::compile_file("shaders/g_buffer_fs.glsl"sv, shader_type::fragment)
-    };
+    shader_program g_buffer_program_{make_vf_program(
+        "shaders/g_buffer_vs.glsl"_path,
+        "shaders/g_buffer_fs.glsl"_path,
+        "diffuseTexture", 0,
+        "specularTexture", 1,
+        "normalTexture", 2
+    )};
     shader_uniform g_projection_{g_buffer_program_.uniform("projection")};
     shader_uniform g_model_{g_buffer_program_.uniform("model")};
     shader_uniform g_view_{g_buffer_program_.uniform("view")};
     shader_uniform g_normal_mat_{g_buffer_program_.uniform("normalMat")};
 
-    shader_program g_lighting_program_{
-        shader::compile_file("shaders/base/fbuffer_vs.glsl"sv, shader_type::vertex),
-        shader::compile_file("shaders/g_lighting_fs.glsl"sv, shader_type::fragment)
-    };
+    shader_program g_lighting_program_{make_vf_program(
+        "shaders/base/fbuffer_vs.glsl"_path,
+        "shaders/g_lighting_fs.glsl"_path,
+        "depthTexture", 0,
+        "inputNormal", 1,
+        "input1", 2,
+        "input2", 3
+    )};
     shader_uniform lighting_view_pos_{g_lighting_program_.uniform("viewPos")};
     shader_uniform lighting_frame_size_{g_lighting_program_.uniform("frameSize")};
     shader_uniform lighting_inverse_view_projection_{g_lighting_program_.uniform("inverseViewProjection")};
 
-    shader_program g_lighting_accumulate_program_{
-        shader::compile_file("shaders/common/sphere_vs.glsl"sv, shader_type::vertex),
-        shader::compile_file("shaders/g_lighting_accumulate_fs.glsl"sv, shader_type::fragment)};
+    shader_program g_lighting_accumulate_program_{make_vf_program(
+        "shaders/common/sphere_vs.glsl"_path,
+        "shaders/g_lighting_accumulate_fs.glsl"_path,
+        "depthTexture", 0,
+        "inputNormal", 1,
+        "input1", 2,
+        "input2", 3
+    )};
     shader_uniform accumulate_projection_{g_lighting_accumulate_program_.uniform("projection")};
     shader_uniform accumulate_view_model_{g_lighting_accumulate_program_.uniform("viewModel")};
     shader_uniform accumulate_view_pos_{g_lighting_accumulate_program_.uniform("viewPos")};
@@ -316,30 +312,34 @@ private:
     shader_uniform accumulate_light_color_{g_lighting_accumulate_program_.uniform("light.color")};
     shader_uniform accumulate_light_range_{g_lighting_accumulate_program_.uniform("light.range")};
 
-    shader_program g_debug_position_program_{
-        shader::compile_file("shaders/base/fbuffer_vs.glsl"sv, shader_type::vertex),
-        shader::compile_file("shaders/g_debug_position_fs.glsl"sv, shader_type::fragment)
-    };
+    shader_program g_debug_position_program_{make_vf_program(
+        "shaders/base/fbuffer_vs.glsl"_path,
+        "shaders/g_debug_position_fs.glsl"_path,
+        "depthTexture", 0
+    )};
     shader_uniform g_debug_frame_size_{g_debug_position_program_.uniform("frameSize")};
     shader_uniform g_debug_inverse_view_projection_{g_debug_position_program_.uniform("inverseViewProjection")};
 
-    shader_program g_debug_normal_program_{
-        shader::compile_file("shaders/base/fbuffer_vs.glsl"sv, shader_type::vertex),
-        shader::compile_file("shaders/g_debug_normal_fs.glsl"sv, shader_type::fragment)
-    };
+    shader_program g_debug_normal_program_{make_vf_program(
+        "shaders/base/fbuffer_vs.glsl"_path,
+        "shaders/g_debug_normal_fs.glsl"_path,
+        "normalTexture", 0
+    )};
 
-    shader_program g_light_range_program_{
-        shader::compile_file("shaders/common/sphere_vs.glsl"sv, shader_type::vertex),
-        shader::compile_file("shaders/common/pure_color_fs.glsl"sv, shader_type::fragment)
-    };
+    shader_program g_light_range_program_{make_vf_program(
+        "shaders/common/sphere_vs.glsl"_path,
+        "shaders/common/pure_color_fs.glsl"_path
+    )};
 
     model backpack_{model::load_file("resources/models/backpack_modified/backpack.obj",
                                      texture_type::diffuse | texture_type::normal | texture_type::specular)};
 
-    shader_program post_program_{
-        shader::compile_file("shaders/base/fbuffer_vs.glsl"sv, shader_type::vertex),
-        shader::compile_file("shaders/hdr_exposure_fs.glsl"sv, shader_type::fragment)
-    };
+    shader_program post_program_{make_vf_program(
+        "shaders/base/fbuffer_vs.glsl"_path,
+        "shaders/hdr_exposure_fs.glsl"_path,
+        "screenTexture", 0,
+        "exposure", 1.0f
+    )};
 
     struct light_t
     {

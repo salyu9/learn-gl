@@ -18,13 +18,11 @@ enum class draw_type
 
 cubemap make_diffuse(cubemap & input, GLsizei size)
 {
-    static auto prog = shader_program{
-        shader::compile_file("shaders/compute/env_diffuse.glsl", shader_type::compute),
-    };
+    static auto prog = make_compute_program("shaders/compute/env_diffuse.glsl");
 
     input.bind_unit(0);
     cubemap c{size};
-    c.bind_write_image(1);
+    c.bind_image_unit(1, image_bind_access::write);
 
     prog.use();
 
@@ -39,9 +37,6 @@ class ibl_pbr final : public example
 public:
     ibl_pbr()
     {
-        color_program_.uniform("albedo").set_vec3(glm::vec3(0.8f, 0.8f, 0.8f));
-        color_ao_.set_float(1);
-
         for (auto i = 0u; i < lights_.size(); ++i)
         {
             auto color_light = light_uniform_t{color_program_, i};
@@ -236,12 +231,14 @@ private :
         {glm::vec3(10.0f, -10.0f, 10.0f), glm::vec3(300.0f, 300.0f, 300.0f)},
     };
 
-    vertex_array sphere_{utils::create_uv_sphere(30, 30, true)};
+    vertex_array sphere_{utils::create_uv_sphere(50, 50, true)};
 
-    shader_program color_program_{
-        shader::compile_file("shaders/pbr/sphere_pbr_color_vs.glsl", shader_type::vertex),
-        shader::compile_file("shaders/pbr/ibl_color_fs.glsl", shader_type::fragment),
-    };
+    shader_program color_program_{make_vf_program(
+        "shaders/pbr/sphere_pbr_color_vs.glsl"_path,
+        "shaders/pbr/ibl_color_fs.glsl"_path,
+        "albedo", glm::vec3(0.8f, 0.8f, 0.8f),
+        "ao", 1.0f
+    )};
     shader_uniform color_projection_{color_program_.uniform("projection")};
     shader_uniform color_view_uniform_{color_program_.uniform("view")};
     shader_uniform color_model_uniform_{color_program_.uniform("model")};
@@ -249,7 +246,6 @@ private :
     shader_uniform color_view_pos_{color_program_.uniform("viewPos")};
     shader_uniform color_metalness_{color_program_.uniform("metalness")};
     shader_uniform color_roughness_{color_program_.uniform("roughness")};
-    shader_uniform color_ao_{color_program_.uniform("ao")};
 
     shader_program texture_program_{
         shader::compile_file("shaders/pbr/sphere_pbr_texture_vs.glsl", shader_type::vertex),

@@ -9,6 +9,21 @@ using json = nlohmann::json;
 
 // --------------------- texture -------------------------------
 
+inline GLenum get_bitmap_texture_type(bitmap const &bmp)
+{
+    switch (bmp.internal_format())
+    {
+    case bitmap_internal_format::u8:
+        return GL_UNSIGNED_BYTE;
+    case bitmap_internal_format::u16:
+        return GL_UNSIGNED_SHORT;
+    case bitmap_internal_format::f32:
+        return GL_FLOAT;
+    default:
+        throw std::runtime_error(std::format("Unknown bitmap internal format: {}", bmp.internal_format()));
+    }
+}
+
 GLenum to_image_format(texture2d_format format)
 {
     switch (format)
@@ -56,7 +71,8 @@ GLenum to_internal_format(texture2d_format format, texture2d_elem_type elem_type
     return iter->second;
 }
 
-void create_texture_resources(GLuint & handle, bool srgb, texture2d_format format, texture2d_elem_type elem_type, bitmap &bmp, GLsizei &width, GLsizei &height)
+void create_texture_resources(GLuint & handle, bool srgb, texture2d_format format, texture2d_elem_type elem_type,
+    bitmap &bmp, GLsizei &width, GLsizei &height, GLenum &internal_format)
 {
     if (format == texture2d_format::unspecified)
     {
@@ -89,7 +105,8 @@ void create_texture_resources(GLuint & handle, bool srgb, texture2d_format forma
     glTextureParameteri(handle, GL_TEXTURE_MIN_FILTER, GL_LINEAR_MIPMAP_LINEAR);
     glTextureParameteri(handle, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
 
-    glTextureStorage2D(handle, bmp.max_mipmap_level(), to_internal_format(format, elem_type), bmp.width(), bmp.height());
+    internal_format = to_internal_format(format, elem_type);
+    glTextureStorage2D(handle, bmp.max_mipmap_level(), internal_format, bmp.width(), bmp.height());
     glTextureSubImage2D(handle, 0, 0, 0, bmp.width(), bmp.height(), to_image_format(format), get_bitmap_texture_type(bmp), bmp.pixels());
     glGenerateTextureMipmap(handle);
     width = bmp.width();
@@ -97,7 +114,7 @@ void create_texture_resources(GLuint & handle, bool srgb, texture2d_format forma
 }
 
 texture2d::texture2d(GLsizei width, GLsizei height, GLsizei multisamples, GLenum internal_format)
-    : width_{width}, height_{height}
+    : width_{width}, height_{height}, internal_format_{internal_format}
 {
     if (multisamples == 0)
     {
@@ -105,8 +122,8 @@ texture2d::texture2d(GLsizei width, GLsizei height, GLsizei multisamples, GLenum
         glTextureStorage2D(handle_, 1, internal_format, width, height);
         glTextureParameteri(handle_, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
         glTextureParameteri(handle_, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-        glTextureParameteri(handle_, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_BORDER);
-        glTextureParameteri(handle_, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_BORDER);
+        glTextureParameteri(handle_, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+        glTextureParameteri(handle_, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
     }
     else
     {
@@ -122,8 +139,7 @@ texture2d::texture2d(GLsizei width, GLsizei height, GLsizei multisamples, GLenum
 
 texture2d::texture2d(GLsizei width, GLsizei height, GLsizei multisamples, texture2d_format format, texture2d_elem_type elem_type)
     : texture2d(width, height, multisamples, to_internal_format(format, elem_type))
-{
-}
+{ }
 
 texture2d::texture2d(std::byte const *p, size_t size, bool srgb, texture2d_elem_type elem_type, texture2d_format format)
 {
@@ -133,7 +149,7 @@ texture2d::texture2d(std::byte const *p, size_t size, bool srgb, texture2d_elem_
     else if (format == texture2d_format::rgba)
         required_channel = bitmap_channel::rgba;
     auto bmp = bitmap::from_memory(p, size, required_channel, true);
-    create_texture_resources(handle_, srgb, format, elem_type, bmp, width_, height_);
+    create_texture_resources(handle_, srgb, format, elem_type, bmp, width_, height_, internal_format_);
 }
 
 texture2d::texture2d(std::filesystem::path const &filename, bool srgb, texture2d_elem_type elem_type, texture2d_format format)
@@ -144,7 +160,7 @@ texture2d::texture2d(std::filesystem::path const &filename, bool srgb, texture2d
     else if (format == texture2d_format::rgba)
         required_channel = bitmap_channel::rgba;
     auto bmp = bitmap::from_file(filename, required_channel, true);
-    create_texture_resources(handle_, srgb, format, elem_type, bmp, width_, height_);
+    create_texture_resources(handle_, srgb, format, elem_type, bmp, width_, height_, internal_format_);
 }
 
 // ----------------------- cubemap ------------------------------------
@@ -212,13 +228,11 @@ cubemap::cubemap() = default;
 
 cubemap cubemap::from_single_texture(texture2d & texture, GLsizei size)
 {
-    static auto prog = shader_program{
-        shader::compile_file("shaders/compute/cubemap_mapping.glsl", shader_type::compute),
-    };
+    static auto prog = make_compute_program("shaders/compute/cubemap_mapping.glsl");
 
     texture.bind_unit(0);
     cubemap c{size};
-    c.bind_write_image(1);
+    c.bind_image_unit(1, image_bind_access::write);
 
     prog.use();
 

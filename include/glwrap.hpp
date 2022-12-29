@@ -840,6 +840,45 @@ namespace glwrap
             glProgramUniformMatrix4fv(program_handle_, location_, 1, GL_FALSE, value_ptr(v));
         }
 
+        template <typename T>
+        T get() const = delete;
+
+        template <>
+        GLfloat get<GLfloat>() const { return get_float(); }
+        void set(GLfloat v) { set_float(v); }
+
+        template <>
+        GLboolean get<GLboolean>() const { return get_bool(); }
+        void set(GLboolean v) { set_bool(v); }
+
+        template <>
+        GLint get<GLint>() const { return get_int(); }
+        void set(GLint v) { set_int(v); }
+
+        template <>
+        GLuint get<GLuint>() const { return get_uint(); }
+        void set(GLuint v) { set_uint(v); }
+
+        template <>
+        glm::vec2 get<glm::vec2>() const { return get_vec2(); }
+        void set(glm::vec2 const& v) { set_vec2(v); }
+
+        template <>
+        glm::vec3 get<glm::vec3>() const { return get_vec3(); }
+        void set(glm::vec3 const &v) { set_vec3(v); }
+
+        template <>
+        glm::vec4 get<glm::vec4>() const { return get_vec4(); }
+        void set(glm::vec4 const &v) { set_vec4(v); }
+
+        template <>
+        glm::mat3 get<glm::mat3>() const { return get_mat3(); }
+        void set(glm::mat3 const &v) { set_mat3(v); }
+
+        template <>
+        glm::mat4 get<glm::mat4>() const { return get_mat4(); }
+        void set(glm::mat4 const &v) { set_mat4(v); }
+
     private:
         friend class shader_program;
         shader_uniform(GLuint program_handle, std::string_view name)
@@ -938,6 +977,80 @@ namespace glwrap
         GLuint handle_ = 0;
     };
 
+    namespace details
+    {
+        inline void apply_uniform_presets(shader_program & prog)
+        { }
+
+        template <typename T, typename... TRest>
+        inline void apply_uniform_presets(shader_program & prog, std::string_view name, T&& value, TRest&&...rest)
+        {
+            prog.uniform(name).set(std::forward<T>(value));
+            apply_uniform_presets(prog, std::forward<TRest>(rest)...);
+        }
+    }
+
+    inline shader_program make_vf_program(
+        std::filesystem::path const &vertex_shader_path,
+        std::filesystem::path const &fragment_shader_path)
+    {
+        return shader_program{
+            shader::compile_file(vertex_shader_path, shader_type::vertex),
+            shader::compile_file(fragment_shader_path, shader_type::fragment)};
+    }
+
+    template <typename ...T>
+    inline shader_program make_vf_program(
+        std::filesystem::path const &vertex_shader_path,
+        std::filesystem::path const &fragment_shader_path,
+        T&& ...uniform_presets
+    )
+    {
+        auto prog = make_vf_program(vertex_shader_path, fragment_shader_path);
+        details::apply_uniform_presets(prog, std::forward<T>(uniform_presets)...);
+        return prog;
+    }
+
+    inline shader_program make_vgf_program(
+        std::filesystem::path const &vertex_shader_path,
+        std::filesystem::path const &geometry_shader_path,
+        std::filesystem::path const &fragment_shader_path)
+    {
+        return shader_program{
+            shader::compile_file(vertex_shader_path, shader_type::vertex),
+            shader::compile_file(geometry_shader_path, shader_type::geometry),
+            shader::compile_file(fragment_shader_path, shader_type::fragment)};
+    }
+
+    template <typename ...T>
+    inline shader_program make_vgf_program(
+        std::filesystem::path const &vertex_shader_path,
+        std::filesystem::path const &geometry_shader_path,
+        std::filesystem::path const &fragment_shader_path,
+        T&& ...uniform_presets)
+    {
+        auto prog = make_vgf_program(vertex_shader_path, geometry_shader_path, fragment_shader_path);
+        details::apply_uniform_presets(prog, std::forward<T>(uniform_presets)...);
+        return prog;
+    }
+
+    inline shader_program make_compute_program(std::filesystem::path const &compute_shader_path)
+    {
+        return shader_program{shader::compile_file(compute_shader_path, shader_type::compute)};
+    }
+
+    template <typename... T>
+    inline shader_program make_compute_program(
+        std::filesystem::path const &compute_shader_path,
+        T&& ...uniform_presets)
+    {
+        auto prog = make_compute_program(compute_shader_path);
+        details::apply_uniform_presets(prog, std::forward<T>(uniform_presets)...);
+        return prog;
+    }
+
+    // ------------- texture -------------------------
+
     enum class texture2d_format : GLenum
     {
         unspecified = 0,
@@ -955,20 +1068,12 @@ namespace glwrap
         f32,
     };
 
-    inline GLenum get_bitmap_texture_type(bitmap const& bmp)
+    enum class image_bind_access : GLenum
     {
-        switch (bmp.internal_format())
-        {
-        case bitmap_internal_format::u8:
-            return GL_UNSIGNED_BYTE;
-        case bitmap_internal_format::u16:
-            return GL_UNSIGNED_SHORT;
-        case bitmap_internal_format::f32:
-            return GL_FLOAT;
-        default:
-            throw std::runtime_error(std::format("Unknown bitmap internal format: {}", bmp.internal_format()));
-        }
-    }
+        read = GL_READ_ONLY,
+        write = GL_WRITE_ONLY,
+        read_write = GL_READ_WRITE,
+    };
 
     class texture2d final
     {
@@ -1014,6 +1119,16 @@ namespace glwrap
             glBindTextureUnit(unit, handle_);
         }
 
+        void bind_image_unit(GLuint unit, image_bind_access access)
+        {
+            glBindImageTexture(unit, handle_, 0, GL_TRUE, 0, static_cast<GLenum>(access), internal_format_);
+            auto err = glGetError();
+            if (err != GL_NO_ERROR)
+            {
+                throw gl_error(std::format("Cannot bind image unit: GL error={:x}", err));
+            }
+        }
+
         GLuint handle() const noexcept
         {
             return handle_;
@@ -1027,6 +1142,7 @@ namespace glwrap
 
         GLuint handle_{0};
         GLsizei width_{}, height_{};
+        GLenum internal_format_{};
 
         friend class frame_buffer;
     };
@@ -1078,7 +1194,7 @@ namespace glwrap
 
         void bind_unit(GLuint unit) { glBindTextureUnit(unit, handle_); }
 
-        void bind_write_image(GLuint unit) { glBindImageTexture(unit, handle_, 0, GL_TRUE, 0, GL_WRITE_ONLY, GL_RGBA32F); }
+        void bind_image_unit(GLuint unit, image_bind_access access) { glBindImageTexture(unit, handle_, 0, GL_TRUE, 0, static_cast<GLenum>(access), GL_RGBA32F); }
 
         GLuint handle() { return handle_; }
 

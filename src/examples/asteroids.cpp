@@ -14,15 +14,6 @@ public:
 
     asteroids(int amount, bool draw_instanced)
         : amount_(amount), draw_instanced_(draw_instanced)
-        , planet_projection_{planet_program_.uniform("projection")}
-        , planet_model_view_{planet_program_.uniform("modelView")}
-        , planet_diffuse0_{planet_program_.uniform("textureDiffuse0")}
-        , asteroid_projection_{asteroid_program_.uniform("projection")}
-        , asteroid_model_view_{asteroid_program_.uniform("modelView")}
-        , asteroid_diffuse0_{asteroid_program_.uniform("textureDiffuse0")}
-        , asteroid_instanced_projection_{asteroid_instanced_program_.uniform("projection")}
-        , asteroid_instanced_view_{asteroid_instanced_program_.uniform("view")}
-        , asteroid_instanced_diffuse0_{asteroid_instanced_program_.uniform("textureDiffuse0")}
     {
         auto mt = std::mt19937(std::random_device()());
         auto rng = [&mt, d = std::uniform_real_distribution(0.0f, 1.0f)]() mutable { return d(mt); };
@@ -156,9 +147,9 @@ public:
         shader::compile_file("shaders/straight_fs.glsl", shader_type::fragment),
     };
 
-    shader_uniform planet_projection_;
-    shader_uniform planet_model_view_;
-    shader_uniform planet_diffuse0_;
+    shader_uniform planet_projection_{planet_program_.uniform("projection")};
+    shader_uniform planet_model_view_{planet_program_.uniform("modelView")};
+    shader_uniform planet_diffuse0_{planet_program_.uniform("textureDiffuse0")};
 
     model asteroid_model_{model::load_file("resources/models/rock/rock.obj", texture_type::diffuse)};
 
@@ -167,18 +158,18 @@ public:
         shader::compile_file("shaders/straight_fs.glsl", shader_type::fragment),
     };
 
-    shader_uniform asteroid_projection_;
-    shader_uniform asteroid_model_view_;
-    shader_uniform asteroid_diffuse0_;
+    shader_uniform asteroid_projection_{asteroid_program_.uniform("projection")};
+    shader_uniform asteroid_model_view_{asteroid_program_.uniform("modelView")};
+    shader_uniform asteroid_diffuse0_{asteroid_program_.uniform("textureDiffuse0")};
 
     shader_program asteroid_instanced_program_{
         shader::compile_file("shaders/asteroid_vs.glsl", shader_type::vertex),
         shader::compile_file("shaders/straight_fs.glsl", shader_type::fragment),
     };
 
-    shader_uniform asteroid_instanced_projection_;
-    shader_uniform asteroid_instanced_view_;
-    shader_uniform asteroid_instanced_diffuse0_;
+    shader_uniform asteroid_instanced_projection_{asteroid_instanced_program_.uniform("projection")};
+    shader_uniform asteroid_instanced_view_{asteroid_instanced_program_.uniform("view")};
+    shader_uniform asteroid_instanced_diffuse0_{asteroid_instanced_program_.uniform("textureDiffuse0")};
 
     std::vector<glm::mat4> mats_;
 };
