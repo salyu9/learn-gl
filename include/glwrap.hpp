@@ -1107,6 +1107,9 @@ namespace glwrap
         void swap(texture2d &other) noexcept
         {
             std::swap(handle_, other.handle_);
+            std::swap(width_, other.width_);
+            std::swap(height_, other.height_);
+            std::swap(internal_format_, other.internal_format_);
         }
 
         void bind()
@@ -1156,18 +1159,20 @@ namespace glwrap
             std::filesystem::path const &top,
             std::filesystem::path const &bottom,
             std::filesystem::path const &back,
-            std::filesystem::path const &front);
+            std::filesystem::path const &front,
+            GLenum internal_format = GL_SRGB8);
 
-        explicit cubemap(std::filesystem::path const &folder, std::string const& file_ext)
+        explicit cubemap(std::filesystem::path const &folder, std::string const& file_ext, GLenum internal_format = GL_SRGB8)
          : cubemap(folder / ("right" + file_ext),
                    folder / ("left" + file_ext),
                    folder / ("top" + file_ext),
                    folder / ("bottom" + file_ext),
                    folder / ("front" + file_ext),
-                   folder / ("back" + file_ext))
+                   folder / ("back" + file_ext),
+                   internal_format)
         { }
 
-        explicit cubemap(GLsizei size);
+        explicit cubemap(GLsizei size, GLenum internal_format = GL_RGBA16F, int mipmap_levels = 0);
 
         cubemap(cubemap&& other) noexcept
         {
@@ -1182,7 +1187,7 @@ namespace glwrap
             }
         }
 
-        static cubemap from_single_texture(texture2d &texture, GLsizei size);
+        static cubemap from_single_texture(texture2d &texture, GLsizei size, GLenum internal_format = GL_RGBA16F);
 
         cubemap& operator= (cubemap&& other) noexcept
         {
@@ -1194,16 +1199,22 @@ namespace glwrap
 
         void bind_unit(GLuint unit) { glBindTextureUnit(unit, handle_); }
 
-        void bind_image_unit(GLuint unit, image_bind_access access) { glBindImageTexture(unit, handle_, 0, GL_TRUE, 0, static_cast<GLenum>(access), GL_RGBA32F); }
+        void bind_image_unit(GLuint unit, image_bind_access access, GLint level = 0)
+        {
+            glBindImageTexture(unit, handle_, level, GL_TRUE, 0, static_cast<GLenum>(access), internal_format_);
+        }
 
         GLuint handle() { return handle_; }
 
-        void swap(cubemap & other) {
+        void swap(cubemap & other)
+        {
             std::swap(handle_, other.handle_);
+            std::swap(internal_format_, other.internal_format_);
         }
 
     private:
         cubemap();
+        GLenum internal_format_{};
         GLuint handle_{0};
     };
 

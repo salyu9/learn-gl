@@ -150,6 +150,11 @@ texture2d::texture2d(std::byte const *p, size_t size, bool srgb, texture2d_elem_
         required_channel = bitmap_channel::rgba;
     auto bmp = bitmap::from_memory(p, size, required_channel, true);
     create_texture_resources(handle_, srgb, format, elem_type, bmp, width_, height_, internal_format_);
+    auto err = glGetError();
+    if (err != GL_NO_ERROR)
+    {
+        throw gl_error(std::format("Create texture2d failed: {}", err));
+    }
 }
 
 texture2d::texture2d(std::filesystem::path const &filename, bool srgb, texture2d_elem_type elem_type, texture2d_format format)
@@ -161,6 +166,11 @@ texture2d::texture2d(std::filesystem::path const &filename, bool srgb, texture2d
         required_channel = bitmap_channel::rgba;
     auto bmp = bitmap::from_file(filename, required_channel, true);
     create_texture_resources(handle_, srgb, format, elem_type, bmp, width_, height_, internal_format_);
+    auto err = glGetError();
+    if (err != GL_NO_ERROR)
+    {
+        throw gl_error(std::format("Create texture2d failed: {}", err));
+    }
 }
 
 // ----------------------- cubemap ------------------------------------
@@ -170,7 +180,9 @@ cubemap::cubemap(std::filesystem::path const &right,
                  std::filesystem::path const &top,
                  std::filesystem::path const &bottom,
                  std::filesystem::path const &back,
-                 std::filesystem::path const &front)
+                 std::filesystem::path const &front,
+                 GLenum internal_format)
+    : internal_format_{internal_format}
 {
     std::tuple<bitmap, GLenum, GLsizei> faces[] = {
         {bitmap::from_file(right, bitmap_channel::rgb), GL_TEXTURE_CUBE_MAP_POSITIVE_X, 0},
@@ -182,7 +194,6 @@ cubemap::cubemap(std::filesystem::path const &right,
     };
     auto &first_bmp = std::get<bitmap>(faces[0]);
     GLsizei width = first_bmp.width(), height = first_bmp.height(), levels = first_bmp.max_mipmap_level();
-    auto internal_format = first_bmp.internal_format();
     for (auto &[bmp, _1, _2] : faces)
     {
         if (bmp.width() != width || bmp.height() != height)
@@ -190,14 +201,14 @@ cubemap::cubemap(std::filesystem::path const &right,
     }
 
     glCreateTextures(GL_TEXTURE_CUBE_MAP, 1, &handle_);
-    glTextureStorage2D(handle_, 1, GL_SRGB8, width, height);
+    glTextureStorage2D(handle_, levels > 0 ? levels : 1, internal_format, width, height);
     for (auto &[bmp, _, i] : faces)
     {
         glTextureSubImage3D(handle_, 0, 0, 0, i, width, height, 1, GL_RGB, get_bitmap_texture_type(bmp), bmp.pixels());
     }
     glGenerateTextureMipmap(handle_);
     glTextureParameteri(handle_, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-    glTextureParameteri(handle_, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+    glTextureParameteri(handle_, GL_TEXTURE_MIN_FILTER, GL_LINEAR_MIPMAP_LINEAR);
     glTextureParameteri(handle_, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
     glTextureParameteri(handle_, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
     glTextureParameteri(handle_, GL_TEXTURE_WRAP_R, GL_CLAMP_TO_EDGE);
@@ -208,15 +219,21 @@ cubemap::cubemap(std::filesystem::path const &right,
     }
 }
 
-cubemap::cubemap(GLsizei size)
+cubemap::cubemap(GLsizei size, GLenum internal_format, int mipmap_levels)
+    :internal_format_{internal_format}
 {
     glCreateTextures(GL_TEXTURE_CUBE_MAP, 1, &handle_);
-    glTextureStorage2D(handle_, 1, GL_RGBA32F, size, size);
+    glTextureStorage2D(handle_, mipmap_levels > 0 ? mipmap_levels : 1, internal_format, size, size);
     glTextureParameteri(handle_, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-    glTextureParameteri(handle_, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+    glTextureParameteri(handle_, GL_TEXTURE_MIN_FILTER, mipmap_levels > 0 ? GL_LINEAR_MIPMAP_LINEAR : GL_LINEAR);
     glTextureParameteri(handle_, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
     glTextureParameteri(handle_, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
     glTextureParameteri(handle_, GL_TEXTURE_WRAP_R, GL_CLAMP_TO_EDGE);
+    if (mipmap_levels > 0)
+    {
+        glGenerateTextureMipmap(handle_);
+    }
+    
     auto err = glGetError();
     if (err != GL_NO_ERROR)
     {
@@ -226,12 +243,12 @@ cubemap::cubemap(GLsizei size)
 
 cubemap::cubemap() = default;
 
-cubemap cubemap::from_single_texture(texture2d & texture, GLsizei size)
+cubemap cubemap::from_single_texture(texture2d & texture, GLsizei size, GLenum internal_format)
 {
     static auto prog = make_compute_program("shaders/compute/cubemap_mapping.glsl");
 
     texture.bind_unit(0);
-    cubemap c{size};
+    cubemap c{size, internal_format};
     c.bind_image_unit(1, image_bind_access::write);
 
     prog.use();
@@ -239,6 +256,11 @@ cubemap cubemap::from_single_texture(texture2d & texture, GLsizei size)
     glDispatchCompute(size, size, 1);
     glMemoryBarrier(GL_SHADER_IMAGE_ACCESS_BARRIER_BIT);
 
+    auto err = glGetError();
+    if (err != GL_NO_ERROR)
+    {
+        throw gl_error(std::format("Cannot create cubemap for texture, err = {}", err));
+    }
     return c;
 }
 

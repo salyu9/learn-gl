@@ -4,6 +4,13 @@
 #include "skybox.hpp"
 
 using namespace glwrap;
+using namespace std::literals;
+
+inline constexpr GLsizei cubemap_size = 1024;
+inline constexpr GLsizei diffuse_size = 32;
+inline constexpr GLsizei prefilter_size = 128;
+inline constexpr GLsizei prefilter_level = 5;
+inline constexpr GLsizei split_sum_size = 512;
 
 enum class draw_type
 {
@@ -11,17 +18,16 @@ enum class draw_type
     final_texture,
     env,
     env_diffuse,
-    // env_ss1,
-    // env_ss2,
+    env_prefiltered,
+    split_sum,
     max,
 };
 
 cubemap make_diffuse(cubemap & input, GLsizei size)
 {
     static auto prog = make_compute_program("shaders/compute/env_diffuse.glsl");
-
     input.bind_unit(0);
-    cubemap c{size};
+    cubemap c{size, GL_RGBA16F};
     c.bind_image_unit(1, image_bind_access::write);
 
     prog.use();
@@ -30,6 +36,42 @@ cubemap make_diffuse(cubemap & input, GLsizei size)
     glMemoryBarrier(GL_SHADER_IMAGE_ACCESS_BARRIER_BIT);
 
     return c;
+}
+
+cubemap make_prefilter(cubemap & input, GLsizei size, GLsizei levels)
+{
+    static auto prog = make_compute_program("shaders/compute/env_prefilter.glsl");
+    static auto roughness_uniform = prog.uniform("roughness");
+    input.bind_unit(0);
+    cubemap c{size, GL_RGBA16F, levels};
+
+    prog.use();
+
+    for (int i = 0; i < levels; ++i)
+    {
+        c.bind_image_unit(1, image_bind_access::write, i);
+        roughness_uniform.set(static_cast<float>(i) / (levels - 1));
+        glDispatchCompute(size, size, 1);
+        glMemoryBarrier(GL_SHADER_IMAGE_ACCESS_BARRIER_BIT);
+        size /= 2;
+    }
+
+    return c;
+}
+
+texture2d make_split_sum(cubemap & input, GLsizei size)
+{
+    static auto prog = make_compute_program("shaders/compute/env_split_sum.glsl");
+    texture2d tex{size, size, 0, GL_RG16F};
+
+    prog.use();
+    input.bind_image_unit(0, image_bind_access::read);
+    tex.bind_image_unit(1, image_bind_access::write);
+
+    glDispatchCompute(size, size, 1);
+    glMemoryBarrier(GL_SHADER_IMAGE_ACCESS_BARRIER_BIT);
+
+    return tex;
 }
 
 class ibl_pbr final : public example
@@ -45,12 +87,6 @@ public:
             auto texture_light = light_uniform_t{texture_program_, i};
             texture_light.set(lights_[i].position, lights_[i].flux);
         }
-
-        texture_program_.uniform("albedoTexture").set_int(0);
-        texture_program_.uniform("normalTexture").set_int(1);
-        texture_program_.uniform("metallicTexture").set_int(2);
-        texture_program_.uniform("roughnessTexture").set_int(3);
-        texture_program_.uniform("aoTexture").set_int(4);
 
         prepare_env();
     }
@@ -77,10 +113,10 @@ public:
             return "environment";
         case draw_type::env_diffuse:
             return "environment - diffuse";
-        // case draw_type::env_ss1:
-        //     return "environment - ss1";
-        // case draw_type::env_ss2:
-        //     return "environment - ss2";
+        case draw_type::env_prefiltered:
+            return "environment - prefiltered";
+        case draw_type::split_sum:
+            return "split sum";
         default:
             throw std::runtime_error(std::format("Invalid draw type: {}", static_cast<int>(draw_type_)));
         }
@@ -108,6 +144,8 @@ public:
             color_view_uniform_.set_mat4(view);
             color_view_pos_.set_vec3(view_pos);
             env_diffuse_.bind_unit(0);
+            env_prefiltered_.bind_unit(1);
+            split_sum_.bind_unit(2);
 
             sphere_.bind();
             for (int i = 0; i < count; ++i)
@@ -140,6 +178,8 @@ public:
             roughness_tex_.bind_unit(3);
             ao_tex_.bind_unit(4);
             env_diffuse_.bind_unit(5);
+            env_prefiltered_.bind_unit(6);
+            split_sum_.bind_unit(7);
 
             sphere_.bind();
             for (int i = 0; i < count; ++i)
@@ -164,14 +204,26 @@ public:
         {
             env_diffuse_skybox_.draw(projection, view);
         }
-        // else if (draw_type_ == draw_type::env_ss1)
-        // {
-
-        // }
-        // else if (draw_type_ == draw_type::env_ss2)
-        // {
-
-        // }
+        else if (draw_type_ == draw_type::env_prefiltered)
+        {
+            glDepthMask(GL_FALSE);
+            env_prefiltered_program_.use();
+            env_prefiltered_projection_.set(projection);
+            env_prefiltered_view_.set(glm::mat4(glm::mat3(view)));
+            env_prefiltered_.bind_unit(0);
+            auto &varray = utils::get_skybox();
+            varray.bind();
+            varray.draw(draw_mode::triangles);
+            glDepthMask(GL_TRUE);
+        }
+        else if (draw_type_ == draw_type::split_sum)
+        {
+            split_sum_.bind_unit(0);
+            quad_program_.use();
+            auto &varray = utils::get_quad_varray();
+            varray.bind();
+            varray.draw(draw_mode::triangles);
+        }
         else 
         {
             std::cout << "Invalid draw type" << std::endl;
@@ -237,7 +289,11 @@ private :
         "shaders/pbr/sphere_pbr_color_vs.glsl"_path,
         "shaders/pbr/ibl_color_fs.glsl"_path,
         "albedo", glm::vec3(0.8f, 0.8f, 0.8f),
-        "ao", 1.0f
+        "ao", 1.0f,
+        "maxPrefilteredLevel", prefilter_level - 1.0f,
+        "diffuseEnvCube", 0,
+        "prefilteredCube", 1,
+        "splitSumTex", 2
     )};
     shader_uniform color_projection_{color_program_.uniform("projection")};
     shader_uniform color_view_uniform_{color_program_.uniform("view")};
@@ -247,10 +303,19 @@ private :
     shader_uniform color_metalness_{color_program_.uniform("metalness")};
     shader_uniform color_roughness_{color_program_.uniform("roughness")};
 
-    shader_program texture_program_{
-        shader::compile_file("shaders/pbr/sphere_pbr_texture_vs.glsl", shader_type::vertex),
-        shader::compile_file("shaders/pbr/sphere_pbr_texture_fs.glsl", shader_type::fragment),
-    };
+    shader_program texture_program_{make_vf_program(
+        "shaders/pbr/sphere_pbr_texture_vs.glsl",
+        "shaders/pbr/ibl_texture_fs.glsl",
+        "albedoTexture", 0,
+        "normalTexture", 1,
+        "metallicTexture", 2,
+        "roughnessTexture", 3,
+        "aoTexture", 4,
+        "maxPrefilteredLevel", prefilter_level - 1.0f,
+        "diffuseEnvCube", 5,
+        "prefilteredCube", 6,
+        "splitSumTex", 7
+    )};
     shader_uniform texture_projection_{texture_program_.uniform("projection")};
     shader_uniform texture_view_uniform_{texture_program_.uniform("view")};
     shader_uniform texture_model_uniform_{texture_program_.uniform("model")};
@@ -262,17 +327,36 @@ private :
     texture2d roughness_tex_{"resources/textures/rustediron/roughness.png"};
     texture2d ao_tex_{"resources/textures/rustediron/ao.png"};
 
-    shader_program quad_program_{
-        shader::compile_file("shaders/base/quad_vs.glsl", shader_type::vertex),
-        shader::compile_file("shaders/base/quad_fs.glsl", shader_type::fragment)
+    shader_program quad_program_{make_vf_program(
+        "shaders/base/quad_vs.glsl",
+        "shaders/base/quad_fs.glsl"
+    )};
+
+    shader_program env_prefiltered_program_{make_vf_program(
+        "shaders/base/skybox_vs.glsl",
+        "shaders/base/skybox_fs_leveled.glsl",
+        "skybox", 0,
+        "level", 4.f
+    )};
+    shader_uniform env_prefiltered_projection_{env_prefiltered_program_.uniform("projection")};
+    shader_uniform env_prefiltered_view_{env_prefiltered_program_.uniform("view")};
+
+    inline static std::string env_entries[] = {
+        "resources/textures/Factory_Catwalk/Factory_Catwalk_2k.hdr",
+        "resources/textures/Alexs_Apartment/Alexs_Apt_2k.hdr",
     };
 
-    texture2d env_tex_{"resources/textures/Alexs_Apartment/Alexs_Apt_2k.hdr"};
-    cubemap env_{cubemap::from_single_texture(env_tex_, 1024)};
+    texture2d env_tex_{env_entries[0]};
+    cubemap env_{cubemap::from_single_texture(env_tex_, cubemap_size)};
     skybox env_skybox_{env_};
 
-    cubemap env_diffuse_{make_diffuse(env_, 64)};
+    cubemap env_diffuse_{make_diffuse(env_, diffuse_size)};
     skybox env_diffuse_skybox_{env_diffuse_};
+
+    cubemap env_prefiltered_{make_prefilter(env_, prefilter_size, prefilter_level)};
+    skybox env_prefiltered_skybox_{env_prefiltered_};
+
+    texture2d split_sum_{make_split_sum(env_, split_sum_size)};
 };
 
 std::unique_ptr<example> create_ibl_pbr()

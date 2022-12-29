@@ -334,6 +334,7 @@ try
     glDebugMessageCallback(message_callback, nullptr);
 
     glEnable(GL_CULL_FACE);
+    glEnable(GL_TEXTURE_CUBE_MAP_SEAMLESS);
 
     // timer::update();
     utils::fps_counter<60> fps(timer::time());

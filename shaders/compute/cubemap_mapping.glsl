@@ -5,7 +5,7 @@
 layout(local_size_x = 1, local_size_y = 1) in;
 
 layout(binding = 0) uniform sampler2D texIn;
-layout(rgba32f, binding = 1) uniform writeonly imageCube imageOut;
+layout(rgba16f, binding = 1) uniform writeonly imageCube imageOut;
 
 vec2 uvAt(vec3 dir)
 {

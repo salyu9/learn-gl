@@ -16,7 +16,10 @@ uniform vec3 albedo;
 uniform float metalness;
 uniform float roughness;
 uniform float ao;
+uniform float maxPrefilteredLevel;
 uniform samplerCube diffuseEnvCube;
+uniform samplerCube prefilteredCube;
+uniform sampler2D splitSumTex;
 
 struct Light
 {
@@ -101,12 +104,22 @@ void main()
         Lo += pbr(F0, n, l, v, albedo, metalness, roughness, GKDirect(roughness)) * Li;
     }
 
+    float nv = max(dot(n, v), 0);
+    vec3 F = SchlickFresnelRoughness(F0, nv, roughness);
+    //vec3 F = SchlickFresnel(F0, nv, 0));
+
     // ambient - diffuse
-    vec3 kS = SchlickFresnelRoughness(F0, max(dot(n, v), 0), roughness);
-    //vec3 kS = SchlickFresnel(F0, max(dot(n, v), 0));
+    vec3 kS = F;
     vec3 kD = (vec3(1.0) - kS) * (1.0 - metalness);
     vec3 diffuse  = texture(diffuseEnvCube, n).rgb * albedo;
-    Lo += kD * diffuse * ao;
+    
+    // ambient - specular
+    vec3 R = reflect(-v, n);
+    vec3 specularPrefilerted = textureLod(prefilteredCube, R, roughness * maxPrefilteredLevel).rgb;
+    vec2 splitSum = texture(splitSumTex, vec2(nv, roughness)).rg;
+    vec3 specular = specularPrefilerted * (F * splitSum.x + splitSum.y);
+    
+    Lo += (kD * diffuse + specular) * ao;
 
     FragColor = vec4(Lo, 1);
 }

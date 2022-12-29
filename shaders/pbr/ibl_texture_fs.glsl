@@ -1,4 +1,4 @@
-#version 330 core
+#version 430 core
 
 #define PI 3.1415926535897932384626433832795
 
@@ -13,12 +13,15 @@ in VS_OUT
 out vec4 FragColor;
 
 uniform vec3 viewPos;
-uniform sampler2D albedoTexture;
-uniform sampler2D normalTexture;
-uniform sampler2D metallicTexture;
-uniform sampler2D roughnessTexture;
-uniform sampler2D aoTexture;
-uniform samplerCube diffuseEnvCube;
+layout (binding = 0) uniform sampler2D albedoTexture;
+layout (binding = 1) uniform sampler2D normalTexture;
+layout (binding = 2) uniform sampler2D metallicTexture;
+layout (binding = 3) uniform sampler2D roughnessTexture;
+layout (binding = 4) uniform sampler2D aoTexture;
+uniform float maxPrefilteredLevel;
+layout (binding = 5) uniform samplerCube diffuseEnvCube;
+layout (binding = 6) uniform samplerCube prefilteredCube;
+layout (binding = 7) uniform sampler2D splitSumTex;
 
 struct Light
 {
@@ -81,6 +84,11 @@ vec3 pbr(vec3 F0, vec3 n, vec3 l, vec3 v, vec3 albedo, float metalness, float ro
     return (kD * albedo / PI + specular) * nl;
 }
 
+vec3 SchlickFresnelRoughness(vec3 F0, float nv, float roughness)
+{
+    return F0 + (max(vec3(1 - roughness), F0) - F0) * pow(clamp(1 - nv, 0, 1), 5);
+}
+
 void main()
 {
     vec2 texCoords = fsIn.texCoords;
@@ -107,11 +115,22 @@ void main()
         Lo += pbr(F0, n, l, v, albedo, metalness, roughness, GKDirect(roughness)) * Li;
     }
 
+    float nv = max(dot(n, v), 0);
+    vec3 F = SchlickFresnelRoughness(F0, nv, roughness);
+    //vec3 F = SchlickFresnel(F0, nv, 0));
+
     // ambient - diffuse
-    vec3 kS = SchlickFresnel(F0, max(dot(n, v), 0)); 
+    vec3 kS = F;
     vec3 kD = (vec3(1.0) - kS) * (1.0 - metalness);
     vec3 diffuse  = texture(diffuseEnvCube, n).rgb * albedo;
-    Lo += kD * diffuse * ao;
+    
+    // ambient - specular
+    vec3 R = reflect(-v, n);
+    vec3 specularPrefilerted = textureLod(prefilteredCube, R, roughness * maxPrefilteredLevel).rgb;
+    vec2 splitSum = texture(splitSumTex, vec2(nv, roughness)).rg;
+    vec3 specular = specularPrefilerted * (F * splitSum.x + splitSum.y);
+    
+    Lo += (kD * diffuse + specular) * ao;
 
     FragColor = vec4(Lo, 1);
 }

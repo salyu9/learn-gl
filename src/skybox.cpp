@@ -7,23 +7,21 @@ using namespace glwrap;
 struct skybox::skybox_impl final {
     std::optional<cubemap> holded_;
     cubemap *p_cubemap_;
-    shader_program program_{
-        shader::compile_file("shaders/base/skybox_vs.glsl", shader_type::vertex),
-        shader::compile_file("shaders/base/skybox_fs.glsl", shader_type::fragment)};
+    shader_program program_{make_vf_program(
+        "shaders/base/skybox_vs.glsl",
+        "shaders/base/skybox_fs.glsl",
+        "skybox", 0
+    )};
     shader_uniform proj_uniform_{program_.uniform("projection")};
     shader_uniform view_uniform_{program_.uniform("view")};
 
     skybox_impl(cubemap &cubemap)
         : p_cubemap_(&cubemap)
-    {
-        program_.uniform("skybox").set_int(0);
-    }
+    { }
 
     skybox_impl(cubemap &&cubemap)
         : holded_{std::move(cubemap)}, p_cubemap_{&holded_.value()}
-    {
-        program_.uniform("skybox").set_int(0);
-    }
+    { }
 };
 
 skybox::skybox(cubemap &cubemap)
