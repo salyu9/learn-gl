@@ -76,8 +76,8 @@ void main()
 {
     uint outX = gl_GlobalInvocationID.x;
     uint outY = gl_GlobalInvocationID.y;
-    float inX = float(outX) / gl_NumWorkGroups.x * 2 - 1;
-    float inY = float(outY) / gl_NumWorkGroups.y * 2 - 1;
+    float inX = (outX + 0.5) / gl_NumWorkGroups.x * 2 - 1;
+    float inY = (outY + 0.5) / gl_NumWorkGroups.y * 2 - 1;
 
     imageStore(cubeOut, ivec3(outX, outY, 0), convolution(normalize(vec3(1, -inY, -inX)))); // +x
     imageStore(cubeOut, ivec3(outX, outY, 1), convolution(normalize(vec3(-1, -inY, inX)))); // -x

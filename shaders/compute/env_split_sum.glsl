@@ -94,7 +94,7 @@ vec2 IntegrateBRDF(float NdotV, float roughness)
         float NdotH = max(H.z, 0.0);
         float VdotH = max(dot(V, H), 0.0);
 
-        if(NdotL > 0.0)
+        if (NdotL > 0.0)
         {
             float G = SmithGeometry(NdotL, NdotV, GKIBL(roughness));
             float G_Vis = (G * VdotH) / (NdotH * NdotV);
@@ -113,6 +113,7 @@ void main()
 {
     // x: nv (cos theta)
     // y: roughness
-    vec2 texCoords = vec2(gl_GlobalInvocationID.xy) / gl_NumWorkGroups.xy;
-    imageStore(texOut, ivec2(gl_GlobalInvocationID.xy), vec4(IntegrateBRDF(texCoords.x, texCoords.y), 0, 0));
+    float nv = (gl_GlobalInvocationID.x + 0.5) / gl_NumWorkGroups.x;
+    float roughness = (gl_GlobalInvocationID.y + 0.5) / gl_NumWorkGroups.y;
+    imageStore(texOut, ivec2(gl_GlobalInvocationID.xy), vec4(IntegrateBRDF(nv, roughness), 0, 0));
 }
