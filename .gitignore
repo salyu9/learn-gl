@@ -1,5 +1,7 @@
+/.vs/
+
 /build
 
-/.vscode
+/out/
 
 *.pdb
