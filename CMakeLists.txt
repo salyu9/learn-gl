@@ -1,4 +1,4 @@
-cmake_minimum_required(VERSION 3.21.0)
+cmake_minimum_required(VERSION 3.24.0)
 project(
     learn-gl
     VERSION 0.1.0
@@ -45,6 +45,7 @@ FetchContent_Declare(
     assimp
     GIT_REPOSITORY https://github.com/assimp/assimp
     GIT_TAG v5.2.5
+    GIT_PROGRESS TRUE
 )
 FetchContent_MakeAvailable(assimp)
 
@@ -56,6 +57,29 @@ FetchContent_Declare(
 )
 FetchContent_MakeAvailable(json)
 
+# ------ imgui -------------
+
+FetchContent_Declare(
+    imgui
+    GIT_REPOSITORY https://github.com/ocornut/imgui.git
+    GIT_TAG v1.89.4
+    GIT_PROGRESS TRUE
+)
+if (NOT imgui_POPULATED)
+    FetchContent_Populate(imgui)
+    set(IMGUI_INCLUDE_DIR "${imgui_SOURCE_DIR}/")
+    file(GLOB IMGUI_SOURCES "${imgui_SOURCE_DIR}/*.cpp")
+    file(GLOB IMGUI_HEADERS "${imgui_SOURCE_DIR}/*.h")
+    add_library(imgui STATIC 
+        "${IMGUI_SOURCES}"
+        "${imgui_SOURCE_DIR}/backends/imgui_impl_glfw.cpp"
+        "${imgui_SOURCE_DIR}/backends/imgui_impl_opengl3.cpp"
+    )
+
+    target_include_directories(imgui PUBLIC ${IMGUI_INCLUDE_DIR} ${OPENGL_INCLUDE_DIR} ${GLFW_INCLUDE_DIR} ${GLAD_INCLUDE_DIR})
+    target_link_libraries(imgui ${OPENGL_LIBRARIES} glfw)
+endif ()
+
 # ------ learn-gl ----------
 
 file(GLOB_RECURSE include CONFIGURE_DEPENDS "include/*")
@@ -65,7 +89,7 @@ file(GLOB_RECURSE src CONFIGURE_DEPENDS "src/*")
 
 add_executable(learn-gl "${src}" "external/glad/src/gl.c" "${include}")
 target_include_directories(learn-gl PRIVATE include external/stb external/glad/include)
-target_link_libraries(learn-gl PRIVATE glm glfw assimp nlohmann_json::nlohmann_json)
+target_link_libraries(learn-gl PRIVATE glm glfw assimp nlohmann_json::nlohmann_json imgui)
 
 target_compile_features(learn-gl PUBLIC cxx_std_20)
 set_target_properties(learn-gl PROPERTIES CXX_EXTENSIONS OFF)

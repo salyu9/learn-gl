@@ -93,33 +93,25 @@ public:
 
     bool is_hdr() override { return true; }
 
-    void on_switch_state() override
+    void switch_state(int i) override
     {
-        draw_type_ = static_cast<draw_type>(static_cast<int>(draw_type_) + 1);
+        draw_type_ = static_cast<draw_type>(i);
         if (draw_type_ == draw_type::max) {
             draw_type_ = {};
         }
     }
 
-    std::optional<std::string_view> get_state() override
+    std::vector<std::string> const& get_states() override
     {
-        switch (draw_type_)
-        {
-        case draw_type::final_color:
-            return "final - color";
-        case draw_type::final_texture:
-            return "final - texture";
-        case draw_type::env:
-            return "environment";
-        case draw_type::env_diffuse:
-            return "environment - diffuse";
-        case draw_type::env_prefiltered:
-            return "environment - prefiltered";
-        case draw_type::split_sum:
-            return "split sum";
-        default:
-            throw std::runtime_error(std::format("Invalid draw type: {}", static_cast<int>(draw_type_)));
-        }
+        static std::vector<std::string> states{
+            "final - color",
+            "final - texture",
+            "environment",
+            "environment - diffuse",
+            "environment - prefiltered",
+            "split sum",
+        };
+        return states;
     }
 
     std::optional<camera> get_camera() override

@@ -3,6 +3,8 @@
 #include "examples.hpp"
 #include "utils.hpp"
 
+#include "imgui.h"
+
 using namespace std::literals;
 using namespace glwrap;
 
@@ -19,6 +21,7 @@ public:
     hdr_scene()
     {
         glDisable(GL_CULL_FACE);
+        exposure_uniform_.set(exposure_);
     }
 
     std::optional<camera> get_camera() override
@@ -26,25 +29,30 @@ public:
         return camera{glm::vec3(1.12f, 0.50f, -2.52f), glm::vec3(0, 1, 0), 100.0f, -7.7f};
     }
 
-    void on_switch_state() override
+    void switch_state(int i) override
     {
-        hdr_ = !hdr_;
+        hdr_ = i == 0;
     }
 
-    std::optional<std::string_view> get_state() override
+    std::vector<std::string> const &get_states() override
     {
-        return hdr_ ? "HDR" : "LDR";
+        static std::vector<std::string> states{"HDR", "LDR"};
+        return states;
     }
 
-    void draw(glm::mat4 const& projection, camera & cam) override
+    void draw_gui() override
     {
         if (hdr_)
         {
-            auto period = 3.0f;
-            auto t = std::abs((std::fmod(timer::time(), (2 * period)) / period - 1));
-            exposure_.set_float(t * 5);
+            if (ImGui::SliderFloat("Exposure", &exposure_, 0, 5))
+            {
+                exposure_uniform_.set_float(exposure_);
+            }
         }
+    }
 
+    void draw(glm::mat4 const &projection, camera &cam) override
+    {
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
         hdr_light_program_.use();
@@ -63,7 +71,7 @@ public:
         varray_.draw(draw_mode::triangles);
     }
 
-    shader_program * postprocessor_ptr() override
+    shader_program *postprocessor_ptr() override
     {
         return hdr_ ? &postprocess_ : &postprocess_nonhdr_;
     }
@@ -89,8 +97,7 @@ private:
         "lights[2].Color", glm::vec3(0.0f, 0.0f, 0.2f),
         "lights[3].Color", glm::vec3(0.0f, 0.1f, 0.0f),
         "diffuseTexture", 0,
-        "inverse_normals", true
-    )};
+        "inverse_normals", true)};
 
     shader_uniform projection_{hdr_light_program_.uniform("projection")};
     shader_uniform view_{hdr_light_program_.uniform("view")};
@@ -98,14 +105,13 @@ private:
 
     shader_program postprocess_nonhdr_{make_vf_program(
         "shaders/base/fbuffer_vs.glsl"_path,
-        "shaders/base/fbuffer_fs.glsl"_path
-    )};
+        "shaders/base/fbuffer_fs.glsl"_path)};
 
     shader_program postprocess_{make_vf_program(
         "shaders/base/fbuffer_vs.glsl"_path,
-        "shaders/hdr_exposure_fs.glsl"_path
-    )};
-    shader_uniform exposure_{postprocess_.uniform("exposure")};
+        "shaders/hdr_exposure_fs.glsl"_path)};
+    float exposure_ = 2;
+    shader_uniform exposure_uniform_{postprocess_.uniform("exposure")};
 };
 
 std::unique_ptr<example> create_hdr()

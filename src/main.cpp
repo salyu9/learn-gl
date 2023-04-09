@@ -12,6 +12,10 @@
 #include "glm/matrix.hpp"
 #include "glm/gtx/transform.hpp"
 
+#include "imgui.h"
+#include "backends/imgui_impl_glfw.h"
+#include "backends/imgui_impl_opengl3.h"
+
 #include "glwrap.hpp"
 #include "camera.hpp"
 #include "model.hpp"
@@ -34,23 +38,19 @@ std::unique_ptr<example> create_bloom();
 std::unique_ptr<example> create_deferred();
 std::unique_ptr<example> create_direct_light_pbr();
 std::unique_ptr<example> create_ibl_pbr();
-inline std::vector<std::tuple<std::string_view, example_creator>> get_examples()
-{
-    return {
-        {"Model Loading", create_backpack},
-        {"Geometry Shader", create_nanosuit_explode},
-        {"Asteroid Field", create_asteroids},
-        {"Asteroid Field (Instancing)", create_asteroids_instanced},
-        {"Normal Mapping", create_normal_map},
-        {"Parallax Mapping", create_parallax_map},
-        {"HDR / Tone Mapping", create_hdr},
-        {"Bloom", create_bloom},
-        {"Deferred Shading", create_deferred},
-        {"Direct Light PBR", create_direct_light_pbr},
-        {"IBL PBR", create_ibl_pbr},
-    };
-}
-std::string example_state;
+static inline std::vector<std::tuple<std::string, example_creator>> all_examples{
+    {"Model Loading", create_backpack},
+    {"Geometry Shader", create_nanosuit_explode},
+    {"Asteroid Field", create_asteroids},
+    {"Asteroid Field (Instancing)", create_asteroids_instanced},
+    {"Normal Mapping", create_normal_map},
+    {"Parallax Mapping", create_parallax_map},
+    {"HDR / Tone Mapping", create_hdr},
+    {"Bloom", create_bloom},
+    {"Deferred Shading", create_deferred},
+    {"Direct Light PBR", create_direct_light_pbr},
+    {"IBL PBR", create_ibl_pbr},
+};
 
 // ----- window status ---------
 const int init_width = 1600;
@@ -59,6 +59,8 @@ int screen_width = init_width;
 int screen_height = init_height;
 bool is_hdr;
 std::unique_ptr<example> example_ptr;
+std::optional<std::string> example_name;
+int example_state = 0;
 std::optional<frame_buffer> fbuffer{};
 std::optional<frame_buffer> postbuffer{};
 bool wireframe_mode = false;
@@ -67,26 +69,19 @@ GLint max_samples;
 
 void reset_frame_buffer()
 {
+    if (!example_ptr)
+    {
+        return;
+    }
     example_ptr->reset_frame_buffer(screen_width, screen_height);
     fbuffer.emplace(screen_width, screen_height, multisamples, is_hdr);
-    if (multisamples > 0) {
-        postbuffer.emplace(screen_width, screen_height, 0, is_hdr);
-    }
-    else {
-        postbuffer.reset();
-    }
-}
-
-void refresh_example_state()
-{
-    const auto &state = example_ptr->get_state();
-    if (state.has_value())
+    if (multisamples > 0)
     {
-        example_state = std::format(" [{}] ", state.value());
+        postbuffer.emplace(screen_width, screen_height, 0, is_hdr);
     }
     else
     {
-        example_state = {};
+        postbuffer.reset();
     }
 }
 
@@ -147,11 +142,6 @@ void key_callback(GLFWwindow *window, int key, int scancode, int action, int mod
             std::cout << std::format("multisample: {}", multisamples) << std::endl;
             reset_frame_buffer();
         }
-        else if (key == GLFW_KEY_SPACE)
-        {
-            example_ptr->on_switch_state();
-            refresh_example_state();
-        }
     }
 }
 
@@ -183,7 +173,8 @@ void process_input(GLFWwindow *window)
 void cursor_pos_callback(GLFWwindow *window, double x, double y)
 {
     using namespace input_status;
-    if (!wondering) {
+    if (!wondering)
+    {
         return;
     }
 
@@ -193,24 +184,30 @@ void cursor_pos_callback(GLFWwindow *window, double x, double y)
     auto ori_x = x;
     auto ori_y = y;
 
-    while (x < 0) {
+    while (x < 0)
+    {
         x += wnd_width;
     }
-    while (x > wnd_width) {
+    while (x > wnd_width)
+    {
         x -= wnd_width;
     }
-    while (y < 0) {
+    while (y < 0)
+    {
         y += wnd_height;
     }
-    while (y > wnd_height) {
+    while (y > wnd_height)
+    {
         y -= wnd_height;
     }
-    if (x != ori_x || y != ori_y) {
+    if (x != ori_x || y != ori_y)
+    {
         cursor.x = x;
         cursor.y = y;
         glfwSetCursorPos(window, x, y);
     }
-    else {
+    else
+    {
         cursor.delta_x = x - cursor.x;
         cursor.delta_y = y - cursor.y;
         cursor.x = x;
@@ -238,7 +235,6 @@ void mouse_button_callback(GLFWwindow *window, int button, int action, int mods)
             input_status::wondering = false;
         }
     }
-    
 }
 
 void scroll_callback(GLFWwindow *window, double xoffset, double yoffset)
@@ -267,31 +263,9 @@ void GLAPIENTRY message_callback(GLenum source,
     }
 }
 
-int main(int argc, char* argv[])
+int main(int argc, char *argv[])
 try
 {
-    auto examples = get_examples();
-
-    size_t in;
-    if (argc >= 2) {
-        in = std::stoul(argv[1]);
-    }
-    else {
-        std::cout << "Examples:" << std::endl;
-        auto i = 0;
-        for (auto &[name, _] : examples)
-        {
-            std::cout << std::format("    {:>2}: ", ++i) << name << std::endl;
-        }
-        std::cout << std::format("Select [1~{}]:", examples.size()) << std::flush;
-        if (!(std::cin >> in) || in == 0 || in > examples.size())
-        {
-            std::cout << "Invalid input" << std::endl;
-            return EXIT_FAILURE;
-        }
-    }
-    auto [example_name, example_creator] = examples[in - 1U];
-
     if (glfwInit() != GLFW_TRUE)
     {
         std::cout << "glfwInit() failed." << std::endl;
@@ -312,6 +286,33 @@ try
     }
     glfwMakeContextCurrent(window);
     glfwSwapInterval(0);
+    float content_scale_x, content_scale_y;
+    glfwGetWindowContentScale(window, &content_scale_x, &content_scale_y);
+    glfwSetKeyCallback(window, key_callback);
+    glfwSetCursorPosCallback(window, cursor_pos_callback);
+    glfwSetMouseButtonCallback(window, mouse_button_callback);
+    glfwSetScrollCallback(window, scroll_callback);
+    glfwGetCursorPos(window, &input_status::cursor.x, &input_status::cursor.y);
+
+    // Setup Dear ImGui context
+    IMGUI_CHECKVERSION();
+    ImGui::CreateContext();
+    ImGuiIO &io = ImGui::GetIO();
+    (void)io;
+    io.ConfigFlags |= ImGuiConfigFlags_NavEnableKeyboard;
+    io.ConfigFlags |= ImGuiConfigFlags_NavEnableGamepad;
+    io.IniFilename = nullptr;
+    ImGui::StyleColorsDark();
+    auto &imgui_style = ImGui::GetStyle();
+    imgui_style.AntiAliasedFill = true;
+    imgui_style.AntiAliasedLines = true;
+    imgui_style.AntiAliasedLinesUseTex = true;
+    ImGui_ImplGlfw_InitForOpenGL(window, true);
+    ImGui_ImplOpenGL3_Init("#version 150");
+    // io.Fonts->AddFontDefault();
+    io.Fonts->AddFontFromFileTTF("./resources/fonts/SourceHanSans-Regular.ttc", 24.0f, nullptr, io.Fonts->GetGlyphRangesChineseSimplifiedCommon());
+
+    auto imgui_clear_color = ImVec4(0.45f, 0.55f, 0.60f, 1.00f);
 
     if (gladLoadGL(glfwGetProcAddress) == 0)
     {
@@ -322,12 +323,8 @@ try
 
     glEnable(GL_DEPTH_TEST);
     glViewport(0, 0, init_width, init_height);
+
     glfwSetFramebufferSizeCallback(window, framebuffer_size_callback);
-    glfwSetKeyCallback(window, key_callback);
-    glfwSetCursorPosCallback(window, cursor_pos_callback);
-    glfwSetMouseButtonCallback(window, mouse_button_callback);
-    glfwSetScrollCallback(window, scroll_callback);
-    glfwGetCursorPos(window, &input_status::cursor.x, &input_status::cursor.y);
 
     // During init, enable debug output
     glEnable(GL_DEBUG_OUTPUT);
@@ -341,13 +338,7 @@ try
     int counted_frames = 0;
 
     try
-    {
-        example_ptr = example_creator();
-        refresh_example_state();
-        is_hdr = example_ptr->is_hdr();
-        framebuffer_size_callback(window, init_width, init_height);
-
-        // frame buffer
+    { // frame buffer
         struct quad_vertex_t
         {
             using vertex_desc_t = std::tuple<glm::vec2, glm::vec2>;
@@ -368,76 +359,167 @@ try
             shader::compile_file(is_hdr ? "shaders/base/fbuffer_fs_reinhard.glsl"sv : "shaders/base/fbuffer_fs.glsl"sv, shader_type::fragment));
         quad_program.uniform("screenTexture").set_int(0);
 
-        auto cam = example_ptr->get_camera();
-        if (cam.has_value()) {
-            main_camera = cam.value();
-        }
-
         while (!glfwWindowShouldClose(window))
         {
-            timer::update();
-            fps.count(timer::time());
-            ++counted_frames;
-            if (counted_frames == fps.capacity())
-            {
-                counted_frames = 0;
-                glfwSetWindowTitle(window, std::format("LearnOpenGL - {}{} ({:.1f} fps, camera at {}, yaw={:.1f}, pitch={:.1f})",
-                   example_name,
-                   example_state,
-                   fps.fps(),
-                   main_camera.position(),
-                   main_camera.yaw(),
-                   main_camera.pitch()
-                ).c_str());
-            }
+            glfwPollEvents();
 
             process_input(window);
+            if (!example_ptr)
+            {
+                ImGui_ImplOpenGL3_NewFrame();
+                ImGui_ImplGlfw_NewFrame();
+                ImGui::NewFrame();
 
-            auto proj_mat = main_camera.projection(static_cast<float>(screen_width) / screen_height);
+                static float f = 0.0f;
+                static int counter = 0;
 
-            if (!example_ptr->custom_render()) {
-                auto &fb = fbuffer.value();
-                fb.bind();
-                if (wireframe_mode) {
-                    fb.clear({0.2f, 0.3f, 0.3f, 1.0f});
-                    glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
+                ImGui::Begin("Select example...");
+
+                ImGui::SetWindowFontScale(content_scale_x);
+                // ImGui::Text("This is some useful text."); // Display some text (you can use a format strings too)
+                // ImGui::Text(std::format("FPS: {}", fps.fps()).c_str());
+
+                // ImGui::SliderFloat("float", &f, 0.0f, 1.0f);                   // Edit 1 float using a slider from 0.0f to 1.0f
+                // ImGui::ColorEdit3("clear color", (float *)&imgui_clear_color); // Edit 3 floats representing a color
+
+                // if (ImGui::Button("Button")) // Buttons return true when clicked (most widgets return true when edited/activated)
+                //     counter++;
+                // ImGui::SameLine();
+                // ImGui::Text("counter = %d", counter);
+
+                // ImGui::Text("Application average %.3f ms/frame (%.1f FPS)", 1000.0f / io.Framerate, io.Framerate);
+                for (auto [name, creator] : all_examples)
+                {
+                    if (ImGui::Button(name.c_str()))
+                    {
+                        example_ptr = creator();
+                        example_name = name;
+                        example_state = 0;
+                        is_hdr = example_ptr->is_hdr();
+                        framebuffer_size_callback(window, init_width, init_height);
+
+                        auto cam = example_ptr->get_camera();
+                        if (cam.has_value())
+                        {
+                            main_camera = cam.value();
+                        }
+                        break;
+                    }
                 }
-                else {
-                    fb.clear();
-                    glPolygonMode(GL_FRONT_AND_BACK, GL_FILL);
+
+                ImGui::End();
+                ImGui::Render();
+
+                glClear(GL_COLOR_BUFFER_BIT);
+            }
+            else
+            {
+                auto destroy = false;
+
+                timer::update();
+                fps.count(timer::time());
+
+                ImGui_ImplOpenGL3_NewFrame();
+                ImGui_ImplGlfw_NewFrame();
+                ImGui::NewFrame();
+
+                static float f = 0.0f;
+                static int counter = 0;
+
+                ImGui::SetNextWindowSizeConstraints({400, 200}, {static_cast<float>(screen_width), static_cast<float>(screen_height)});
+                ImGui::Begin(example_name.value().c_str());
+                ImGui::SetWindowFontScale(content_scale_x);
+
+                if (ImGui::Button("<<"))
+                {
+                    example_ptr.reset();
+                    example_name.reset();
+                }
+                else
+                {
+                    ImGui::SameLine();
+                    ImGui::Text(std::format("FPS: {:.1f}", fps.fps()).c_str());
+                    auto &states = example_ptr->get_states();
+                    if (!states.empty())
+                    {
+                        int index = 0;
+                        int prev_state = example_state;
+                        for (auto &state : states)
+                        {
+                            if (index > 0) {
+                                ImGui::SameLine();
+                            }
+                            ImGui::RadioButton(state.c_str(), &example_state, index++);
+                        }
+                        if (prev_state != example_state)
+                        {
+                            example_ptr->switch_state(example_state);
+                        }
+                    }
+                    example_ptr->draw_gui();
+                }
+
+                ImGui::End();
+                ImGui::Render();
+
+                if (example_ptr)
+                {
+                    auto proj_mat = main_camera.projection(static_cast<float>(screen_width) / screen_height);
+
+                    if (!example_ptr->custom_render())
+                    {
+                        auto &fb = fbuffer.value();
+                        fb.bind();
+                        if (wireframe_mode)
+                        {
+                            fb.clear({0.2f, 0.3f, 0.3f, 1.0f});
+                            glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
+                        }
+                        else
+                        {
+                            fb.clear();
+                            glPolygonMode(GL_FRONT_AND_BACK, GL_FILL);
+                        }
+                    }
+
+                    example_ptr->draw(proj_mat, main_camera);
+
+                    if (!example_ptr->custom_render())
+                    {
+                        frame_buffer::unbind_all();
+                        glDisable(GL_DEPTH_TEST);
+                        glPolygonMode(GL_FRONT_AND_BACK, GL_FILL);
+                        auto &fb = fbuffer.value();
+                        if (multisamples > 0)
+                        {
+                            auto &pb = postbuffer.value();
+                            fb.blit_to(pb, GL_COLOR_BUFFER_BIT);
+                            pb.color_texture().bind_unit(0);
+                        }
+                        else
+                        {
+                            fb.color_texture().bind_unit(0);
+                        }
+                        quad_varray.bind();
+
+                        auto postprocessor_ptr = example_ptr->postprocessor_ptr();
+                        if (postprocessor_ptr)
+                        {
+                            postprocessor_ptr->use();
+                        }
+                        else
+                        {
+                            quad_program.use();
+                        }
+                        quad_varray.draw(draw_mode::triangles);
+                        glEnable(GL_DEPTH_TEST);
+                    }
                 }
             }
 
-            example_ptr->draw(proj_mat, main_camera);
-
-            if (!example_ptr->custom_render()) {
-                frame_buffer::unbind_all();
-                glDisable(GL_DEPTH_TEST);
-                glPolygonMode(GL_FRONT_AND_BACK, GL_FILL);
-                auto &fb = fbuffer.value();
-                if (multisamples > 0) {
-                    auto & pb = postbuffer.value();
-                    fb.blit_to(pb, GL_COLOR_BUFFER_BIT);
-                    pb.color_texture().bind_unit(0);
-                }
-                else {
-                    fb.color_texture().bind_unit(0);
-                }
-                quad_varray.bind();
-
-                auto postprocessor_ptr = example_ptr->postprocessor_ptr();
-                if (postprocessor_ptr) {
-                    postprocessor_ptr->use();
-                }
-                else {
-                    quad_program.use();
-                }
-                quad_varray.draw(draw_mode::triangles);
-                glEnable(GL_DEPTH_TEST);
-            }
+            ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
 
             glfwSwapBuffers(window);
-            glfwPollEvents();
         }
     }
     catch (std::exception const &e)
@@ -447,7 +529,7 @@ try
     glfwTerminate();
     return EXIT_SUCCESS;
 }
-catch (std::exception const& e)
+catch (std::exception const &e)
 {
     std::cout << e.what() << std::endl;
 }

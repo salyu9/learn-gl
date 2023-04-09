@@ -10,12 +10,11 @@ using namespace std::literals;
 class deferred final : public example
 {
 public:
-
     deferred()
     {
         for (int i = 0; i < lights_.size(); ++i)
         {
-            auto& light = lights_[i];
+            auto &light = lights_[i];
             auto uniform = light_uniform_t{g_lighting_program_, i};
             uniform.set(light);
         }
@@ -33,8 +32,8 @@ public:
     {
         std::vector<texture2d> colors;
         colors.emplace_back(width, height, 0, GL_RG16_SNORM); // octahedral normal
-        colors.emplace_back(width, height, 0, GL_RGB8); // albedo
-        colors.emplace_back(width, height, 0, GL_RGB8); // specular
+        colors.emplace_back(width, height, 0, GL_RGB8);       // albedo
+        colors.emplace_back(width, height, 0, GL_RGB8);       // specular
 
         g_buffer_.emplace(std::move(colors), width, height, 0);
         g_buffer_.value().draw_buffers({0, 1, 2});
@@ -42,21 +41,30 @@ public:
         post_buffer_.emplace(width, height, 0, true);
     }
 
-    void on_switch_state() override
+    void switch_state(int i) override
     {
-        draw_type_ = static_cast<draw_type>(static_cast<int>(draw_type_) + 1);
+        draw_type_ = static_cast<draw_type>(i);
         if (draw_type_ == draw_type::max_value)
         {
             draw_type_ = draw_type::single_pass;
         }
     }
 
-    std::optional<std::string_view> get_state() override
+    std::vector<std::string> const& get_states() override
     {
-        return draw_type_names[static_cast<int>(draw_type_)];
+        static std::vector<std::string> states{
+            "single_pass",
+            "accumulate",
+            "position",
+            "normal",
+            "albedo",
+            "specular",
+            "light_range",
+        };
+        return states;
     }
 
-    void draw(glm::mat4 const& projection, camera & cam)
+    void draw(glm::mat4 const &projection, camera &cam)
     {
 
         auto &gb = g_buffer_.value();
@@ -83,7 +91,7 @@ public:
                 mesh.get_texture(texture_type::diffuse).bind_unit(0);
                 mesh.get_texture(texture_type::specular).bind_unit(1);
                 mesh.get_texture(texture_type::normal).bind_unit(2);
-                auto & varray = mesh.get_varray();
+                auto &varray = mesh.get_varray();
                 varray.bind();
                 varray.draw(draw_mode::triangles);
             }
@@ -113,7 +121,7 @@ public:
             // draw light box
             gb.blit_to(pb, GL_DEPTH_BUFFER_BIT);
             glEnable(GL_DEPTH_TEST);
-            for (auto & light : lights_)
+            for (auto &light : lights_)
             {
                 box_.set_position(light.position);
                 box_.set_color(glm::vec4(light.color, 1));
@@ -251,7 +259,6 @@ public:
             quad_varray.bind();
             quad_varray.draw(draw_mode::triangles);
         }
-
     }
 
 private:
@@ -275,8 +282,7 @@ private:
         "shaders/g_buffer_fs.glsl"_path,
         "diffuseTexture", 0,
         "specularTexture", 1,
-        "normalTexture", 2
-    )};
+        "normalTexture", 2)};
     shader_uniform g_projection_{g_buffer_program_.uniform("projection")};
     shader_uniform g_model_{g_buffer_program_.uniform("model")};
     shader_uniform g_view_{g_buffer_program_.uniform("view")};
@@ -288,8 +294,7 @@ private:
         "depthTexture", 0,
         "inputNormal", 1,
         "input1", 2,
-        "input2", 3
-    )};
+        "input2", 3)};
     shader_uniform lighting_view_pos_{g_lighting_program_.uniform("viewPos")};
     shader_uniform lighting_frame_size_{g_lighting_program_.uniform("frameSize")};
     shader_uniform lighting_inverse_view_projection_{g_lighting_program_.uniform("inverseViewProjection")};
@@ -300,8 +305,7 @@ private:
         "depthTexture", 0,
         "inputNormal", 1,
         "input1", 2,
-        "input2", 3
-    )};
+        "input2", 3)};
     shader_uniform accumulate_projection_{g_lighting_accumulate_program_.uniform("projection")};
     shader_uniform accumulate_view_model_{g_lighting_accumulate_program_.uniform("viewModel")};
     shader_uniform accumulate_view_pos_{g_lighting_accumulate_program_.uniform("viewPos")};
@@ -315,21 +319,18 @@ private:
     shader_program g_debug_position_program_{make_vf_program(
         "shaders/base/fbuffer_vs.glsl"_path,
         "shaders/g_debug_position_fs.glsl"_path,
-        "depthTexture", 0
-    )};
+        "depthTexture", 0)};
     shader_uniform g_debug_frame_size_{g_debug_position_program_.uniform("frameSize")};
     shader_uniform g_debug_inverse_view_projection_{g_debug_position_program_.uniform("inverseViewProjection")};
 
     shader_program g_debug_normal_program_{make_vf_program(
         "shaders/base/fbuffer_vs.glsl"_path,
         "shaders/g_debug_normal_fs.glsl"_path,
-        "normalTexture", 0
-    )};
+        "normalTexture", 0)};
 
     shader_program g_light_range_program_{make_vf_program(
         "shaders/common/sphere_vs.glsl"_path,
-        "shaders/common/pure_color_fs.glsl"_path
-    )};
+        "shaders/common/pure_color_fs.glsl"_path)};
 
     model backpack_{model::load_file("resources/models/backpack_modified/backpack.obj",
                                      texture_type::diffuse | texture_type::normal | texture_type::specular)};
@@ -338,8 +339,7 @@ private:
         "shaders/base/fbuffer_vs.glsl"_path,
         "shaders/hdr_exposure_fs.glsl"_path,
         "screenTexture", 0,
-        "exposure", 1.0f
-    )};
+        "exposure", 1.0f)};
 
     struct light_t
     {
@@ -353,10 +353,9 @@ private:
 
     std::vector<light_t> lights_ = []()
     {
-        auto rng = [
-            mt = std::mt19937{std::random_device()()},
-            dist = std::uniform_real_distribution<float>(0.0f, 1.0f)
-        ]() mutable { return dist(mt); };
+        auto rng = [mt = std::mt19937{std::random_device()()},
+                    dist = std::uniform_real_distribution<float>(0.0f, 1.0f)]() mutable
+        { return dist(mt); };
 
         auto constant = 1.0f;
         auto linear = 0.7f;
@@ -391,9 +390,10 @@ private:
               attenuation{p.uniform(std::format("lights[{}].attenuation", index))},
               color{p.uniform(std::format("lights[{}].color", index))},
               range{p.uniform(std::format("lights[{}].range", index))}
-        { }
+        {
+        }
 
-        void set(light_t const& light)
+        void set(light_t const &light)
         {
             position.set_vec3(light.position);
             attenuation.set_vec3(light.attenuation);
@@ -422,15 +422,6 @@ private:
         max_value
     };
     draw_type draw_type_{};
-    static constexpr std::array<std::string_view, 7> draw_type_names{
-        "single_pass",
-        "accumulate",
-        "position",
-        "normal",
-        "albedo",
-        "specular",
-        "light_range",
-    };
 };
 
 std::unique_ptr<example> create_deferred()

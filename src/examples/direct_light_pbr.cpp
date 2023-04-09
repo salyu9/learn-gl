@@ -22,14 +22,15 @@ public:
 
     bool is_hdr() override { return true; }
 
-    void on_switch_state() override
+    void switch_state(int i) override
     {
-        draw_type_ = 1 - draw_type_;
+        draw_type_ = i;
     }
 
-    std::optional<std::string_view> get_state() override
+    std::vector<std::string> const& get_states() override
     {
-        return (draw_type_ == 0 ? "color" : "texture");
+        static std::vector<std::string> states{"color", "texture"};
+        return states;
     }
 
     std::optional<camera> get_camera() override
