@@ -27,7 +27,6 @@ public:
         model_view_.set_mat4(view);
         for (auto & mesh : model_.meshes()) {
             auto & varray = mesh.get_varray();
-            varray.bind();
             if (mesh.has_texture(texture_type::diffuse))
             {
                 auto &texture = mesh.get_texture(texture_type::diffuse);

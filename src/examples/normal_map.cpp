@@ -48,7 +48,6 @@ public:
         diffuse_sampler_.set_int(0);
         normal_sampler_.set_int(1);
         view_position_.set_vec3(cam.position());
-        varray_.bind();
 
         auto model = glm::rotate(glm::mat4(1), rotation, glm::vec3(0, 1, 0));
         auto normal_mat = glm::inverse(glm::transpose(model));

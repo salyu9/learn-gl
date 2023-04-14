@@ -99,7 +99,6 @@ public:
             m.get_texture(texture_type::diffuse).bind_unit(0);
             planet_diffuse0_.set_int(0);
             auto &varray = m.get_varray();
-            varray.bind();
             varray.draw(draw_mode::triangles);
         }
     }
@@ -115,7 +114,6 @@ public:
                 m.get_texture(texture_type::diffuse).bind_unit(0);
                 asteroid_diffuse0_.set_int(0);
                 auto &varray = m.get_varray();
-                varray.bind();
                 varray.draw_instanced(draw_mode::triangles, amount_);
             }
         }
@@ -130,7 +128,6 @@ public:
                     m.get_texture(texture_type::diffuse).bind_unit(0);
                     asteroid_diffuse0_.set_int(0);
                     auto &varray = m.get_varray();
-                    varray.bind();
                     varray.draw(draw_mode::triangles);
                 }
             }

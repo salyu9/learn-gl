@@ -51,7 +51,6 @@ public:
         diffuse_map1_.bind_unit(0);
         normal_map1_.bind_unit(1);
         depth_map1_.bind_unit(2);
-        varray_.bind();
         varray_.draw(draw_mode::triangles);
 
         model = glm::rotate(glm::mat4(1), rotation + glm::radians(180.0f), glm::vec3(0, 1, 0));
@@ -61,7 +60,6 @@ public:
         diffuse_map2_.bind_unit(0);
         normal_map2_.bind_unit(1);
         depth_map2_.bind_unit(2);
-        varray_.bind();
         varray_.draw(draw_mode::triangles);
 
         light_box_.draw(projection, view);

@@ -38,6 +38,9 @@ std::unique_ptr<example> create_bloom();
 std::unique_ptr<example> create_deferred();
 std::unique_ptr<example> create_direct_light_pbr();
 std::unique_ptr<example> create_ibl_pbr();
+std::unique_ptr<example> create_shadow_map();
+std::unique_ptr<example> create_cascaded_shadow_map();
+std::unique_ptr<example> create_ssao();
 static inline std::vector<std::tuple<std::string, example_creator>> all_examples{
     {"Model Loading", create_backpack},
     {"Geometry Shader", create_nanosuit_explode},
@@ -50,6 +53,9 @@ static inline std::vector<std::tuple<std::string, example_creator>> all_examples
     {"Deferred Shading", create_deferred},
     {"Direct Light PBR", create_direct_light_pbr},
     {"IBL PBR", create_ibl_pbr},
+    {"Shadow Mapping", create_shadow_map},
+    {"Cascaded Shadow Mapping", create_cascaded_shadow_map},
+    {"SSAO", create_ssao},
 };
 
 // ----- window status ---------
@@ -354,10 +360,11 @@ try
             {1.0f, -1.0f, 1.0f, 0.0f},
             {1.0f, 1.0f, 1.0f, 1.0f},
         });
-        auto quad_program = shader_program(
-            shader::compile_file("shaders/base/fbuffer_vs.glsl"sv, shader_type::vertex),
-            shader::compile_file(is_hdr ? "shaders/base/fbuffer_fs_reinhard.glsl"sv : "shaders/base/fbuffer_fs.glsl"sv, shader_type::fragment));
-        quad_program.uniform("screenTexture").set_int(0);
+        auto quad_program = shader_program{make_vf_program(
+            "shaders/base/fbuffer_vs.glsl"sv,
+            is_hdr ? "shaders/base/fbuffer_fs_reinhard.glsl"sv : "shaders/base/fbuffer_fs.glsl"sv,
+            "screenTexture", 0
+        )};
 
         while (!glfwWindowShouldClose(window))
         {
@@ -376,18 +383,6 @@ try
                 ImGui::Begin("Select example...");
 
                 ImGui::SetWindowFontScale(content_scale_x);
-                // ImGui::Text("This is some useful text."); // Display some text (you can use a format strings too)
-                // ImGui::Text(std::format("FPS: {}", fps.fps()).c_str());
-
-                // ImGui::SliderFloat("float", &f, 0.0f, 1.0f);                   // Edit 1 float using a slider from 0.0f to 1.0f
-                // ImGui::ColorEdit3("clear color", (float *)&imgui_clear_color); // Edit 3 floats representing a color
-
-                // if (ImGui::Button("Button")) // Buttons return true when clicked (most widgets return true when edited/activated)
-                //     counter++;
-                // ImGui::SameLine();
-                // ImGui::Text("counter = %d", counter);
-
-                // ImGui::Text("Application average %.3f ms/frame (%.1f FPS)", 1000.0f / io.Framerate, io.Framerate);
                 for (auto [name, creator] : all_examples)
                 {
                     if (ImGui::Button(name.c_str()))
@@ -464,7 +459,8 @@ try
 
                 if (example_ptr)
                 {
-                    auto proj_mat = main_camera.projection(static_cast<float>(screen_width) / screen_height);
+                    main_camera.set_aspect(static_cast<float>(screen_width) / screen_height);
+                    auto proj_mat = main_camera.projection();
 
                     if (!example_ptr->custom_render())
                     {
@@ -500,7 +496,6 @@ try
                         {
                             fb.color_texture().bind_unit(0);
                         }
-                        quad_varray.bind();
 
                         auto postprocessor_ptr = example_ptr->postprocessor_ptr();
                         if (postprocessor_ptr)

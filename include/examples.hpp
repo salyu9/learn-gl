@@ -10,6 +10,7 @@
 class example
 {
 public:
+    virtual ~example() {}
     virtual bool custom_render() { return false; }
     virtual void reset_frame_buffer(GLsizei screen_width, GLsizei screen_height) {}
     virtual std::optional<camera> get_camera() { return std::nullopt; }

@@ -33,7 +33,15 @@ constexpr float max_zoom = 45.0f;
 constexpr float default_near_z = 0.1f;
 constexpr float default_far_z = 100.0f;
 
-class camera
+class view_info
+{
+public:
+    virtual glm::mat4 projection() const noexcept = 0;
+    virtual glm::mat4 view() const noexcept = 0;
+    virtual glm::vec3 position() const noexcept = 0;
+};
+
+class camera : public view_info
 {
 public:
 
@@ -66,18 +74,23 @@ public:
         return camera(position, glm::vec3(0, 1, 0), yaw, pitch, near_z, far_z);
     }
 
-    glm::mat4 projection(float aspect) const noexcept
+    void set_aspect(float aspect)
     {
-        return glm::perspective(glm::radians(zoom_), aspect, near_z_, far_z_);
+        projection_ = glm::perspective(glm::radians(zoom_), aspect, near_z_, far_z_);
+    }
+
+    glm::mat4 projection() const noexcept override
+    {
+        return projection_;
     }
 
     // Returns the view matrix calculated using Euler Angles and the LookAt Matrix
-    glm::mat4 view() const noexcept
+    glm::mat4 view() const noexcept override
     {
         return glm::lookAt(position_, position_ + front_, up_);
     }
 
-    glm::vec3 position() const noexcept
+    glm::vec3 position() const noexcept override
     {
         return position_;
     }
@@ -165,6 +178,7 @@ private:
     float zoom_{default_zoom};
     float movement_speed_{default_speed};
     float mouse_sensitivity_{default_sensitivity};
+    glm::mat4 projection_;
 
     // Calculates the front vector from the Camera's (updated) Euler Angles
     void update_camera_vectors() noexcept

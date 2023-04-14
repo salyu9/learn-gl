@@ -24,6 +24,11 @@ public:
         exposure_uniform_.set(exposure_);
     }
 
+    ~hdr_scene() override
+    {
+        glEnable(GL_CULL_FACE);
+    }
+
     std::optional<camera> get_camera() override
     {
         return camera{glm::vec3(1.12f, 0.50f, -2.52f), glm::vec3(0, 1, 0), 100.0f, -7.7f};
@@ -67,7 +72,6 @@ public:
 
         diffuse_.bind_unit(0);
 
-        varray_.bind();
         varray_.draw(draw_mode::triangles);
     }
 

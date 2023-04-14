@@ -35,7 +35,7 @@
     vertex_array will not keep any of the lvalue-referenced buffers. Please make sure that all the buffers are alive when using vertex_array.
     Examples:
     - auto varray = vertex_array(ibuffer, vbuffer);
-    - auto varray = vertex_array(ibuffer<GLuint>{0, 1, 2, 1, 2, 3}, vertex_buffer<vert_t>{ ... });
+    - auto varray = vertex_array(index_buffer<GLuint>{0, 1, 2, 1, 2, 3}, vertex_buffer<vert_t>{ ... });
 
     * Set vertex array attrib format:
     Use: vbo.enable_attrib(index) and vbo.attrib_format(attrib_index, vbo_index, size, type, normalizing, offset)
@@ -384,16 +384,6 @@ namespace glwrap
             glDisableVertexArrayAttrib(handle_, index);
         }
 
-        void bind()
-        {
-            glBindVertexArray(handle_);
-        }
-
-        static void unbind_all()
-        {
-            glBindVertexArray(0);
-        }
-
         void draw(draw_mode mode)
         {
             if (ibuffer_.has_value())
@@ -412,6 +402,7 @@ namespace glwrap
 
         void draw(draw_mode mode, GLint start, GLsizei count)
         {
+            glBindVertexArray(handle_);
             if (ibuffer_.has_value())
             {
                 intptr_t indices = start * index_size_;
@@ -441,6 +432,7 @@ namespace glwrap
 
         void draw_instanced(draw_mode mode, GLint start, GLsizei count, GLsizei instance_count)
         {
+            glBindVertexArray(handle_);
             if (ibuffer_.has_value())
             {
                 intptr_t indices = start * index_size_;
@@ -1078,14 +1070,14 @@ namespace glwrap
     class texture2d final
     {
     public:
-        texture2d(GLsizei width, GLsizei height, GLsizei multisamples, GLenum internal_format);
+        texture2d(GLsizei width, GLsizei height, GLsizei multisamples, GLenum internal_format, GLenum wrap_mode = GL_REPEAT);
 
-        texture2d(GLsizei width, GLsizei height, GLsizei multisamples = 0, texture2d_format format = texture2d_format::rgb, texture2d_elem_type elem_type = texture2d_elem_type::u8);
+        texture2d(GLsizei width, GLsizei height, GLsizei multisamples = 0, texture2d_format format = texture2d_format::rgb, texture2d_elem_type elem_type = texture2d_elem_type::u8, GLenum wrap_mode = GL_REPEAT);
 
-        texture2d(std::byte const *p, size_t size, bool srgb = false, texture2d_elem_type elem_type = texture2d_elem_type::u8, texture2d_format format = texture2d_format::unspecified);
+        texture2d(std::byte const *p, size_t size, bool srgb = false, texture2d_elem_type elem_type = texture2d_elem_type::u8, texture2d_format format = texture2d_format::unspecified, GLenum wrap_mode = GL_REPEAT);
 
         explicit texture2d(std::filesystem::path const &filename, bool srgb = false, texture2d_elem_type elem_type = texture2d_elem_type::u8,
-                           texture2d_format format = texture2d_format::unspecified);
+                           texture2d_format format = texture2d_format::unspecified, GLenum wrap_mode = GL_REPEAT);
 
         texture2d(texture2d const &) = delete;
         texture2d(texture2d &&other) noexcept { swap(other); }
@@ -1122,15 +1114,9 @@ namespace glwrap
             glBindTextureUnit(unit, handle_);
         }
 
-        void bind_image_unit(GLuint unit, image_bind_access access)
-        {
-            glBindImageTexture(unit, handle_, 0, GL_TRUE, 0, static_cast<GLenum>(access), internal_format_);
-            auto err = glGetError();
-            if (err != GL_NO_ERROR)
-            {
-                throw gl_error(std::format("Cannot bind image unit: GL error={:x}", err));
-            }
-        }
+        void bind_image_unit(GLuint unit, image_bind_access access);
+
+        void set_border_color(glm::vec4 const& color);
 
         GLuint handle() const noexcept
         {
@@ -1223,7 +1209,11 @@ namespace glwrap
     class frame_buffer final
     {
     public:
-        frame_buffer(std::vector<texture2d> &&textures, GLsizei width, GLsizei height, GLsizei multisamples = 0);
+        frame_buffer(std::vector<texture2d> &&color_textures, GLsizei width, GLsizei height, GLsizei multisamples = 0)
+            : frame_buffer(std::move(color_textures), texture2d(width, height, multisamples, GL_DEPTH_COMPONENT32F), width, height, multisamples)
+        { }
+
+        frame_buffer(std::vector<texture2d> &&color_textures, texture2d &&depth_texture, GLsizei width, GLsizei height, GLsizei multisamples = 0);
 
         frame_buffer(GLsizei width, GLsizei height, GLsizei multisamples = 0, bool is_hdr = false);
 

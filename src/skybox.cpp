@@ -40,14 +40,16 @@ skybox &skybox::operator = (skybox &&) noexcept = default;
 void skybox::draw(glm::mat4 const & proj_mat, glm::mat4 const & view_mat)
 {
     // glDepthFunc(GL_LEQUAL);
+
+    GLboolean depth_mask;
+    glGetBooleanv(GL_DEPTH_WRITEMASK, &depth_mask);
     glDepthMask(GL_FALSE);
     impl_->program_.use();
     impl_->proj_uniform_.set_mat4(proj_mat);
     impl_->view_uniform_.set_mat4(glm::mat4(glm::mat3(view_mat)));
     impl_->p_cubemap_->bind_unit(0);
     auto &varray = utils::get_skybox();
-    varray.bind();
     varray.draw(draw_mode::triangles);
     //  glDepthFunc(GL_LESS);
-    glDepthMask(GL_TRUE);
+    glDepthMask(depth_mask);
 }

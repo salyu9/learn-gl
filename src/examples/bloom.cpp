@@ -1,6 +1,8 @@
 #include "examples.hpp"
 #include "common_obj.hpp"
 
+#include "imgui.h"
+
 using namespace std::literals;
 using namespace glwrap;
 
@@ -10,6 +12,7 @@ public:
     bloom()
     {
         blur_program_.uniform("image").set_int(0);
+        exposure_uniform_.set(exposure_);
 
         for (auto i = 0u; i < lights_.size(); ++i)
         {
@@ -18,6 +21,7 @@ public:
             boxes_[i].set_render_bright(true);
         }
         wbox_.set_render_bright(true);
+        wbox_.set_light_count(lights_.size());
     }
 
     bool custom_render() override { return true; }
@@ -33,12 +37,17 @@ public:
         return camera::look_at_camera(glm::vec3(5.1f, 0.1f, 5.4f));
     }
 
+    void draw_gui() override
+    {
+        if (ImGui::SliderFloat("Exposure", &exposure_, 0, 5))
+        {
+            exposure_uniform_.set_float(exposure_);
+        }
+        ImGui::SliderInt("Blur Times", &blur_times_, 0, 20);
+    }
+
     void draw(glm::mat4 const &projection, camera &cam) override
     {
-        auto period = 3.0f;
-        auto t = std::abs((std::fmod(timer::time(), (2 * period)) / period - 1));
-        exposure_.set_float(t * 5);
-
         auto &fb = fbuffer_.value();
 
         fb.bind();
@@ -77,13 +86,12 @@ public:
 
         auto &quad_varray = utils::get_quad_varray();
 
-        quad_varray.bind();
         blur_program_.use();
         auto &bb = blur_buffer_.value();
         bb.clear_color();
         bb.bind();
 
-        for (auto i = 0; i < 10; ++i)
+        for (auto i = 0; i < blur_times_; ++i)
         {
             auto &bright = i == 0 ? fb.color_texture_at(1) : bb.color_texture_at(0);
             bright.bind_unit(0);
@@ -144,7 +152,10 @@ private:
         "screenTexture", 0,
         "blurredBright", 1
     )};
-    shader_uniform exposure_{bloom_final_program_.uniform("exposure")};
+    float exposure_ = 2;
+    shader_uniform exposure_uniform_{bloom_final_program_.uniform("exposure")};
+
+    int blur_times_ = 10;
 
     std::optional<frame_buffer> fbuffer_{};
     std::optional<frame_buffer> blur_buffer_{};

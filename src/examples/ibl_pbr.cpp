@@ -139,7 +139,6 @@ public:
             env_prefiltered_.bind_unit(1);
             split_sum_.bind_unit(2);
 
-            sphere_.bind();
             for (int i = 0; i < count; ++i)
             {
                 auto x = static_cast<float>(i) / count;
@@ -173,7 +172,6 @@ public:
             env_prefiltered_.bind_unit(6);
             split_sum_.bind_unit(7);
 
-            sphere_.bind();
             for (int i = 0; i < count; ++i)
             {
                 auto x = static_cast<float>(i) / count;
@@ -204,7 +202,6 @@ public:
             env_prefiltered_view_.set(glm::mat4(glm::mat3(view)));
             env_prefiltered_.bind_unit(0);
             auto &varray = utils::get_skybox();
-            varray.bind();
             varray.draw(draw_mode::triangles);
             glDepthMask(GL_TRUE);
         }
@@ -213,7 +210,6 @@ public:
             split_sum_.bind_unit(0);
             quad_program_.use();
             auto &varray = utils::get_quad_varray();
-            varray.bind();
             varray.draw(draw_mode::triangles);
         }
         else 

@@ -53,7 +53,6 @@ public:
             color_view_uniform_.set_mat4(view);
             color_view_pos_.set_vec3(view_pos);
 
-            sphere_.bind();
             for (int i = 0; i < count; ++i)
             {
                 auto x = static_cast<float>(i) / count;
@@ -82,7 +81,6 @@ public:
             roughness_tex_.bind_unit(3);
             ao_tex_.bind_unit(4);
 
-            sphere_.bind();
             for (int i = 0; i < count; ++i)
             {
                 auto x = static_cast<float>(i) / count;

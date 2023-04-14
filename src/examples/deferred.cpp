@@ -92,7 +92,6 @@ public:
                 mesh.get_texture(texture_type::specular).bind_unit(1);
                 mesh.get_texture(texture_type::normal).bind_unit(2);
                 auto &varray = mesh.get_varray();
-                varray.bind();
                 varray.draw(draw_mode::triangles);
             }
         }
@@ -115,7 +114,6 @@ public:
             lighting_inverse_view_projection_.set_mat4(glm::inverse(projection * view));
             lighting_view_pos_.set_vec3(cam.position());
             lighting_frame_size_.set_vec2({gb.width(), gb.height()});
-            quad_varray.bind();
             quad_varray.draw(draw_mode::triangles);
 
             // draw light box
@@ -133,7 +131,6 @@ public:
             frame_buffer::unbind_all();
             post_program_.use();
             pb.color_texture().bind_unit(0);
-            quad_varray.bind();
             quad_varray.draw(draw_mode::triangles);
         }
         else if (draw_type_ == draw_type::accumulate)
@@ -148,7 +145,6 @@ public:
             accumulate_inverse_view_projection_.set_mat4(glm::inverse(projection * view));
             accumulate_view_pos_.set_vec3(cam.position());
             accumulate_frame_size_.set_vec2({gb.width(), gb.height()});
-            sphere_.bind();
             glCullFace(GL_FRONT);
             glEnable(GL_BLEND);
             glBlendFunc(GL_ONE, GL_ONE);
@@ -180,7 +176,6 @@ public:
             frame_buffer::unbind_all();
             post_program_.use();
             pb.color_texture().bind_unit(0);
-            quad_varray.bind();
             quad_varray.draw(draw_mode::triangles);
         }
         else if (draw_type_ == draw_type::position)
@@ -190,7 +185,6 @@ public:
             g_debug_inverse_view_projection_.set_mat4(glm::inverse(projection * view));
             g_debug_frame_size_.set_vec2({gb.width(), gb.height()});
             gb.depth_texture().bind_unit(0);
-            quad_varray.bind();
             quad_varray.draw(draw_mode::triangles);
         }
         else if (draw_type_ == draw_type::normal)
@@ -198,7 +192,6 @@ public:
             frame_buffer::unbind_all();
             g_debug_normal_program_.use();
             gb.color_texture_at(0).bind_unit(0);
-            quad_varray.bind();
             quad_varray.draw(draw_mode::triangles);
         }
         else if (draw_type_ == draw_type::albedo)
@@ -206,7 +199,6 @@ public:
             frame_buffer::unbind_all();
             post_program_.use();
             gb.color_texture_at(1).bind_unit(0);
-            quad_varray.bind();
             quad_varray.draw(draw_mode::triangles);
         }
         else if (draw_type_ == draw_type::specular)
@@ -214,7 +206,6 @@ public:
             frame_buffer::unbind_all();
             post_program_.use();
             gb.color_texture_at(2).bind_unit(0);
-            quad_varray.bind();
             quad_varray.draw(draw_mode::triangles);
         }
         else if (draw_type_ == draw_type::light_range)
@@ -223,7 +214,6 @@ public:
             pb.bind();
             post_program_.use();
             gb.color_texture_at(2).bind_unit(0);
-            quad_varray.bind();
             quad_varray.draw(draw_mode::triangles);
 
             // draw light box
@@ -244,7 +234,6 @@ public:
                 auto trans = glm::scale(glm::translate(glm::mat4(1), light.position), glm::vec3(light.range));
                 g_light_range_program_.uniform("viewModel").set_mat4(view * trans);
                 g_light_range_program_.uniform("color").set_vec4({light.color, 0.5f});
-                sphere_.bind();
                 sphere_.draw(draw_mode::triangles);
             }
             glDisable(GL_BLEND);
@@ -256,7 +245,6 @@ public:
             frame_buffer::unbind_all();
             post_program_.use();
             pb.color_texture().bind_unit(0);
-            quad_varray.bind();
             quad_varray.draw(draw_mode::triangles);
         }
     }
