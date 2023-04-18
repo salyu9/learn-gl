@@ -43,11 +43,12 @@ public:
     glm::mat4 const &get_transform() const noexcept;
     void set_transform(glm::mat4 const &transform) noexcept;
     void set_dir_light(glm::vec3 const &dir, glm::vec3 const &color) noexcept;
-    void set_dir_light_space(glm::mat4 const &light_space_mat, int shadow_map_unit_index) noexcept;
     void set_point_light(int index, glm::vec3 const &position, glm::vec3 const &attenuation, glm::vec3 const &color) noexcept;
     void set_ambient_light(glm::vec3 const &color) noexcept;
     void set_light_count(int count) noexcept;
     void set_render_bright(bool value) noexcept;
+
+    glwrap::shader_program &program() noexcept;
 
 private:
     class wooden_box_impl;

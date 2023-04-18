@@ -1,12 +1,16 @@
 #pragma once
 
 #include <string>
+#include <string_view>
+#include <format>
 #include <iostream>
 #include <fstream>
 #include <filesystem>
 #include <chrono>
 #include <memory>
 #include <numbers>
+
+#include "glwrap.hpp"
 
 namespace utils
 {
@@ -201,6 +205,34 @@ namespace utils
     }
 
     glm::vec3 hsv(int h, float s, float v);
+
+    namespace details
+    {
+        template <typename T, size_t N, typename Func, size_t ...I>
+        constexpr auto make_array_impl(Func && func, std::index_sequence<I...>)
+        {
+            return std::array<T, N>{func(I)...};
+        }
+
+        template <size_t N, size_t ...I>
+        auto make_uniform_array_impl(glwrap::shader_program & program, std::string const& name, std::index_sequence<I...>)
+        {
+            std::string formatter = name + std::string("[{}]");
+            return std::array<glwrap::shader_uniform, N>{program.uniform(std::vformat(formatter, std::make_format_args(I)))...};
+        }
+    }
+
+    template <typename T, size_t N, typename Func>
+    constexpr std::array<T, N> make_array(Func&& func)
+    {
+        return details::make_array_impl<T, N>(std::forward<Func>(func), std::make_index_sequence<N>());
+    }
+
+    template <size_t N>
+    std::array<glwrap::shader_uniform, N> make_uniform_array(glwrap::shader_program & program, std::string const& name)
+    {
+        return details::make_uniform_array_impl<N>(program, name, std::make_index_sequence<N>());
+    }
 }
 
 namespace timer

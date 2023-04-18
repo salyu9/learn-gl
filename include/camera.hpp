@@ -76,12 +76,18 @@ public:
 
     void set_aspect(float aspect)
     {
-        projection_ = glm::perspective(glm::radians(zoom_), aspect, near_z_, far_z_);
+        aspect_ = aspect;
+        projection_ = glm::perspective(glm::radians(zoom_), aspect_, near_z_, far_z_);
     }
 
     glm::mat4 projection() const noexcept override
     {
         return projection_;
+    }
+
+    glm::mat4 projection(float near_z, float far_z) const noexcept
+    {
+        return glm::perspective(glm::radians(zoom_), aspect_, near_z, far_z);
     }
 
     // Returns the view matrix calculated using Euler Angles and the LookAt Matrix
@@ -173,6 +179,7 @@ private:
     float yaw_;
     float pitch_;
     // Camera options
+    float aspect_;
     float near_z_;
     float far_z_;
     float zoom_{default_zoom};

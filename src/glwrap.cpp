@@ -135,7 +135,7 @@ texture2d::texture2d(GLsizei width, GLsizei height, GLsizei multisamples, GLenum
     auto err = glGetError();
     if (err != GL_NO_ERROR)
     {
-        throw gl_error(std::format("Create texture2d failed: {}", err));
+        throw gl_error(std::format("Create texture2d failed: {:08x}", err));
     }
 }
 
@@ -155,7 +155,7 @@ texture2d::texture2d(std::byte const *p, size_t size, bool srgb, texture2d_elem_
     auto err = glGetError();
     if (err != GL_NO_ERROR)
     {
-        throw gl_error(std::format("Create texture2d failed: {}", err));
+        throw gl_error(std::format("Create texture2d failed: {:08x}", err));
     }
 }
 
@@ -171,7 +171,7 @@ texture2d::texture2d(std::filesystem::path const &filename, bool srgb, texture2d
     auto err = glGetError();
     if (err != GL_NO_ERROR)
     {
-        throw gl_error(std::format("Create texture2d failed: {}", err));
+        throw gl_error(std::format("Create texture2d failed: {:08x}", err));
     }
 }
 
@@ -181,11 +181,56 @@ void texture2d::bind_image_unit(GLuint unit, image_bind_access access)
     auto err = glGetError();
     if (err != GL_NO_ERROR)
     {
-        throw gl_error(std::format("Cannot bind image unit: GL error={:x}", err));
+        throw gl_error(std::format("Cannot bind image unit: GL error={:08x}", err));
     }
 }
 
 void texture2d::set_border_color(glm::vec4 const& color)
+{
+    glTextureParameterfv(handle_, GL_TEXTURE_BORDER_COLOR, glm::value_ptr(color));
+}
+
+// -------------------- texture2d array -------------------------------
+
+texture2d_array::texture2d_array(GLsizei width, GLsizei height, GLsizei depth, GLsizei multisamples, GLenum internal_format, GLenum wrap_mode)
+    : width_{width}, height_{height}, internal_format_{internal_format}
+{
+    if (multisamples == 0)
+    {
+        glCreateTextures(GL_TEXTURE_2D_ARRAY, 1, &handle_);
+        glTextureStorage3D(handle_, 1, internal_format, width, height, depth);
+        glTextureParameteri(handle_, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+        glTextureParameteri(handle_, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+        glTextureParameteri(handle_, GL_TEXTURE_WRAP_S, wrap_mode);
+        glTextureParameteri(handle_, GL_TEXTURE_WRAP_T, wrap_mode);
+    }
+    else
+    {
+        glCreateTextures(GL_TEXTURE_2D_MULTISAMPLE_ARRAY, 1, &handle_);
+        glTextureStorage3DMultisample(handle_, multisamples, internal_format, width, height, depth, GL_TRUE);
+    }
+    auto err = glGetError();
+    if (err != GL_NO_ERROR)
+    {
+        throw gl_error(std::format("Create texture2d array failed: {:08x}", err));
+    }
+}
+
+texture2d_array::texture2d_array(GLsizei width, GLsizei height, GLsizei depth, GLsizei multisamples, texture2d_format format, texture2d_elem_type elem_type, GLenum wrap_mode)
+    : texture2d_array(width, height, depth, multisamples, to_internal_format(format, elem_type), wrap_mode)
+{ }
+
+void texture2d_array::bind_image_unit(GLuint unit, image_bind_access access)
+{
+    glBindImageTexture(unit, handle_, 0, GL_TRUE, 0, static_cast<GLenum>(access), internal_format_);
+    auto err = glGetError();
+    if (err != GL_NO_ERROR)
+    {
+        throw gl_error(std::format("Cannot bind image unit: GL error={:08x}", err));
+    }
+}
+
+void texture2d_array::set_border_color(glm::vec4 const& color)
 {
     glTextureParameterfv(handle_, GL_TEXTURE_BORDER_COLOR, glm::value_ptr(color));
 }
@@ -232,7 +277,7 @@ cubemap::cubemap(std::filesystem::path const &right,
     auto err = glGetError();
     if (err != GL_NO_ERROR)
     {
-        throw gl_error(std::format("Create cube map failed, gl error = {}", err));
+        throw gl_error(std::format("Create cube map failed, gl error = {:08x}", err));
     }
 }
 
@@ -364,23 +409,49 @@ vertex_array vertex_array::load_simple_json(std::filesystem::path const &path)
 
 struct frame_buffer::frame_buffer_impl final
 {
-    frame_buffer_impl(std::vector<texture2d> &&color_textures, texture2d &&depth_texture, GLsizei width, GLsizei height, GLsizei multisamples)
-        : width_(width), height_(height), multisamples_(multisamples), color_textures_(std::move(color_textures)), depth_texture_(std::move(depth_texture))
+    frame_buffer_impl(GLsizei width, GLsizei height, GLsizei multisamples)
+        : width_(width), height_(height), multisamples_(multisamples)
     {
         glCreateFramebuffers(1, &handle_);
+    }
 
-        for (size_t i = 0; i < color_textures_.size(); ++i)
-        {
-            glNamedFramebufferTexture(handle_, GL_COLOR_ATTACHMENT0 + i, color_textures_[i].handle(), 0);
-        }
-
-        glNamedFramebufferTexture(handle_, GL_DEPTH_ATTACHMENT, depth_texture_.handle(), 0);
-
+    void check_status()
+    {
         auto status = glCheckNamedFramebufferStatus(handle_, GL_FRAMEBUFFER);
         if (status != GL_FRAMEBUFFER_COMPLETE)
         {
             throw gl_error(std::format("Frame buffer uncomplete, status = {:x}", status));
         }
+    }
+
+    void attach_colors(std::vector<texture2d> && textures)
+    {
+        for (size_t i = 0; i < textures.size(); ++i)
+        {
+            glNamedFramebufferTexture(handle_, GL_COLOR_ATTACHMENT0 + i, textures[i].handle(), 0);
+        }
+        color_textures_ = std::move(textures);
+    }
+
+    void attach_colors(std::vector<texture2d_array> && textures)
+    {
+        for (size_t i = 0; i < textures.size(); ++i)
+        {
+            glNamedFramebufferTexture(handle_, GL_COLOR_ATTACHMENT0 + i, textures[i].handle(), 0);
+        }
+        array_color_textures_ = std::move(textures);
+    }
+
+    void attach_depth(texture2d && texture)
+    {
+        glNamedFramebufferTexture(handle_, GL_DEPTH_ATTACHMENT, texture.handle(), 0);
+        depth_texture_ = std::move(texture);
+    }
+
+    void attach_depth(texture2d_array && texture)
+    {
+        glNamedFramebufferTexture(handle_, GL_DEPTH_ATTACHMENT, texture.handle(), 0);
+        array_depth_texture_ = std::move(texture);
     }
 
     ~frame_buffer_impl()
@@ -392,7 +463,9 @@ struct frame_buffer::frame_buffer_impl final
     GLsizei multisamples_{0};
     GLuint handle_{0};
     std::vector<texture2d> color_textures_;
-    texture2d depth_texture_;
+    std::vector<texture2d_array> array_color_textures_;
+    std::optional<texture2d> depth_texture_;
+    std::optional<texture2d_array> array_depth_texture_;
 };
 
 std::vector<texture2d> create_frame_buffer_textures(size_t target_count, GLsizei width, GLsizei height, GLsizei multisamples, bool is_hdr)
@@ -406,8 +479,28 @@ std::vector<texture2d> create_frame_buffer_textures(size_t target_count, GLsizei
 }
 
 frame_buffer::frame_buffer(std::vector<texture2d> &&color_textures, texture2d &&depth_texture, GLsizei width, GLsizei height, GLsizei multisamples)
-    : impl_{std::make_unique<frame_buffer_impl>(std::move(color_textures), std::move(depth_texture), width, height, multisamples)}
-{ }
+    : impl_{std::make_unique<frame_buffer_impl>(width, height, multisamples)}
+{
+    impl_->attach_colors(std::move(color_textures));
+    impl_->attach_depth(std::move(depth_texture));
+    impl_->check_status();
+}
+
+frame_buffer::frame_buffer(std::vector<texture2d_array> &&color_textures, texture2d &&depth_texture, GLsizei width, GLsizei height, GLsizei multisamples)
+    : impl_{std::make_unique<frame_buffer_impl>(width, height, multisamples)}
+{
+    impl_->attach_colors(std::move(color_textures));
+    impl_->attach_depth(std::move(depth_texture));
+    impl_->check_status();
+}
+
+frame_buffer::frame_buffer(std::vector<texture2d> &&color_textures, texture2d_array &&depth_texture, GLsizei width, GLsizei height, GLsizei multisamples)
+    : impl_{std::make_unique<frame_buffer_impl>(width, height, multisamples)}
+{
+    impl_->attach_colors(std::move(color_textures));
+    impl_->attach_depth(std::move(depth_texture));
+    impl_->check_status();
+}
 
 frame_buffer::frame_buffer(GLsizei width, GLsizei height, GLsizei multisamples, bool is_hdr)
     : frame_buffer(1, width, height, multisamples, is_hdr)
@@ -463,14 +556,29 @@ texture2d &frame_buffer::color_texture()
     return impl_->color_textures_.at(0);
 }
 
+texture2d_array &frame_buffer::color_texture_array()
+{
+    return impl_->array_color_textures_.at(0);
+}
+
 texture2d &frame_buffer::color_texture_at(size_t index)
 {
     return impl_->color_textures_.at(index);
 }
 
+texture2d_array &frame_buffer::color_texture_array_at(size_t index)
+{
+    return impl_->array_color_textures_.at(index);
+}
+
 texture2d &frame_buffer::depth_texture()
 {
-    return impl_->depth_texture_;
+    return impl_->depth_texture_.value();
+}
+
+texture2d_array &frame_buffer::depth_texture_array()
+{
+    return impl_->array_depth_texture_.value();
 }
 
 void frame_buffer::draw_buffers(std::span<size_t> indexes)

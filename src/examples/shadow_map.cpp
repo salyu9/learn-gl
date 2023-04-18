@@ -57,8 +57,6 @@ public:
             fb.bind();
             shadow_fb_.depth_texture().bind_unit(shadow_map_unit);
 
-            auto handle = shadow_fb_.depth_texture().handle();
-
             draw_scene(projection, cam, false);
 
             box_.set_position(light_dir);
@@ -85,6 +83,11 @@ public:
             qarray.draw(draw_mode::triangles);
             glEnable(GL_DEPTH_TEST);
         }
+    }
+
+    void draw_gui() override
+    {
+        ImGui::Image((void *)(intptr_t)shadow_fb_.depth_texture().handle(), {256, 256}, {0, 1}, {1, 0});
     }
 
 private:
@@ -132,8 +135,7 @@ private:
         if (shadow_casting)
         {
             shadow_cast_program_.use();
-            shadow_cast_projection_.set(light_view_.projection());
-            shadow_cast_view_.set(light_view_.view());
+            shadow_cast_light_space_mat_.set(light_view_.projection() * light_view_.view());
             shadow_cast_model_.set(glm::mat4(1.0f));
         }
         else
@@ -155,7 +157,7 @@ private:
         if (!shadow_casting)
         {
             wbox_.set_dir_light(light_dir, light_color);
-            wbox_.set_dir_light_space(light_space_mat, shadow_map_unit);
+            wbox_light_space_mat_.set(light_space_mat);
             wbox_.set_ambient_light(ambient_light);
         }
 
@@ -189,8 +191,6 @@ private:
     }();
     std::optional<frame_buffer> fbuffer_{};
 
-    model model_{model::load_file("resources/models/backpack_modified/backpack.obj", texture_type::diffuse | texture_type::specular)};
-
     struct floor_vert_t
     {
         using vertex_desc_t = std::tuple<glm::vec3, glm::vec3, glm::vec2>;
@@ -212,7 +212,7 @@ private:
     texture2d floor_tex_{"resources/textures/wood.png"_path, true, texture2d_elem_type::u8, texture2d_format::unspecified};
     shader_program floor_program_{make_vf_program(
         "shaders/common/simple_position_normal_texcoord_vs.glsl"_path,
-        "shaders/common/simple_blinn_phong_fs.glsl"_path,
+        "shaders/shadow_blinn_phong_fs.glsl"_path,
         "diffuseTexture", 0,
         "specularTexture", 1,
         "dirLight.shadowMap", shadow_map_unit,
@@ -227,13 +227,16 @@ private:
     shader_uniform floor_light_space_mat_{floor_program_.uniform("dirLight.lightSpaceMat")};
     shader_uniform floor_ambient_light_{floor_program_.uniform("ambientLight")};
 
-    wooden_box wbox_;
+    wooden_box wbox_{make_vf_program(
+        "shaders/common/simple_position_normal_texcoord_vs.glsl"_path,
+        "shaders/shadow_blinn_phong_fs.glsl"_path,
+        "dirLight.shadowMap", shadow_map_unit)};
+    shader_uniform wbox_light_space_mat_{wbox_.program().uniform("dirLight.lightSpaceMat")};
 
     shader_program shadow_cast_program_{make_vf_program(
-        "shaders/common/simple_position_normal_texcoord_vs.glsl"_path,
+        "shaders/shadow_cast_vs.glsl"_path,
         "shaders/shadow_cast_fs.glsl"_path)};
-    shader_uniform shadow_cast_projection_{shadow_cast_program_.uniform("projection")};
-    shader_uniform shadow_cast_view_{shadow_cast_program_.uniform("view")};
+    shader_uniform shadow_cast_light_space_mat_{shadow_cast_program_.uniform("lightSpaceMat")};
     shader_uniform shadow_cast_model_{shadow_cast_program_.uniform("model")};
 
     shader_program fb_program_{make_vf_program(
@@ -244,7 +247,7 @@ private:
 
     shader_program shadow_debug_program_{make_vf_program(
         "shaders/base/fbuffer_vs.glsl"_path,
-        "shaders/base/shadow_map_debug_fs.glsl"_path,
+        "shaders/shadow_map_debug_fs.glsl"_path,
         "screenTexture", 0)};
 
     int draw_type_{0};

@@ -36,6 +36,34 @@ uniform bool renderBright;
 out vec4 FragColor;
 out vec4 BrightColor;
 
+float calcShadow(vec4 lightSpacePosition, float bias)
+{
+    vec3 coords = (lightSpacePosition.xyz / lightSpacePosition.w) * 0.5 + 0.5;
+    float currentDepth = coords.z;
+    if (currentDepth > 1) {
+        return 0;
+    }
+
+    // float closestDepth = texture(dirLight.shadowMap, coords.xy).r;    
+    // //return currentDepth - bias > closestDepth ? 1 : 0;
+    // return currentDepth > closestDepth ? 1 : 0;
+
+    float shadow = 0.0;
+    vec2 texelSize = 1.0 / textureSize(dirLight.shadowMap, 0);
+    for(int x = -1; x <= 1; ++x)
+    {
+        for(int y = -1; y <= 1; ++y)
+        {
+            float pcfDepth = texture(dirLight.shadowMap, coords.xy + vec2(x, y) * texelSize).r; 
+            shadow += currentDepth - bias > pcfDepth ? 1 : 0;
+        }
+    }
+    shadow /= 9.0;
+
+    return shadow;
+
+}
+
 void main()
 {
     vec3 diffuse = texture(diffuseTexture, fsInput.texCoords).rgb;
@@ -63,9 +91,15 @@ void main()
     // ---- dir light ----
     if (hasDirLight) {
         vec3 lightDir = normalize(dirLight.dir);
-        result += dirLight.color * max(dot(lightDir, normal), 0) * diffuse;
+        vec3 rawLight = vec3(0);
+        rawLight += dirLight.color * max(dot(lightDir, normal), 0) * diffuse;
         vec3 h = normalize(lightDir + viewDir);
-        result += dirLight.color * pow(max(dot(h, normal), 0), 32.0) * specular;
+        rawLight += dirLight.color * pow(max(dot(h, normal), 0), 32.0) * specular;
+
+        //float bias = max(0.05 * (1 - dot(fsInput.normal, lightDir)), 0.005);
+        float bias = 0;
+        float shadow = calcShadow(dirLight.lightSpaceMat * vec4(fsInput.position, 1.0), bias);
+        result += rawLight * (1.0 - shadow);
     }
 
     result += ambientLight * diffuse;

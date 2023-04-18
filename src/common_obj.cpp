@@ -142,8 +142,6 @@ struct wooden_box::wooden_box_impl
     shader_uniform light_count{program_.uniform("lightCount")};
     shader_uniform dir_light_dir{program_.uniform("dirLight.dir")};
     shader_uniform dir_light_color{program_.uniform("dirLight.color")};
-    shader_uniform dir_light_space_mat{program_.uniform("dirLight.lightSpaceMat")};
-    shader_uniform dir_shadow_map{program_.uniform("dirLight.shadowMap")};
     shader_uniform ambient_light_{program_.uniform("ambientLight")};
 
     texture2d diffuse_tex_{"resources/textures/container2.png"sv, true};
@@ -171,12 +169,6 @@ struct wooden_box::wooden_box_impl
         dir_light_dir.set_vec3(dir);
         dir_light_color.set_vec3(color);
         has_dir_light.set_bool(true);
-    }
-
-    void set_dir_light_space(glm::mat4 const& light_space_mat, int shadow_map_unit_index)
-    {
-        dir_light_space_mat.set(light_space_mat);
-        dir_shadow_map.set(shadow_map_unit_index);
     }
 
     void set_point_light(size_t index, glm::vec3 const &position, glm::vec3 const &attenuation, glm::vec3 const &color)
@@ -273,11 +265,6 @@ void wooden_box::set_dir_light(glm::vec3 const &dir, glm::vec3 const &color) noe
     impl_->set_dir_light(dir, color);
 }
 
-void wooden_box::set_dir_light_space(glm::mat4 const& light_space_mat, int shadow_map_unit_index) noexcept
-{
-    impl_->set_dir_light_space(light_space_mat, shadow_map_unit_index);
-}
-
 void wooden_box::set_point_light(int index, glm::vec3 const &position, glm::vec3 const &attenuation, glm::vec3 const &color) noexcept
 {
     impl_->set_point_light(index, position, attenuation, color);
@@ -296,4 +283,9 @@ void wooden_box::set_ambient_light(glm::vec3 const &color) noexcept
 void wooden_box::set_render_bright(bool value) noexcept
 {
     impl_->set_render_bright(value);
+}
+
+shader_program &wooden_box::program() noexcept
+{
+    return impl_->program_;
 }

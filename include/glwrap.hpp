@@ -1136,6 +1136,70 @@ namespace glwrap
         friend class frame_buffer;
     };
 
+    class texture2d_array final
+    {
+    public:
+        texture2d_array(GLsizei width, GLsizei height, GLsizei depth, GLsizei multisamples, GLenum internal_format, GLenum wrap_mode = GL_REPEAT);
+
+        texture2d_array(GLsizei width, GLsizei height, GLsizei depth, GLsizei multisamples = 0, texture2d_format format = texture2d_format::rgb, texture2d_elem_type elem_type = texture2d_elem_type::u8, GLenum wrap_mode = GL_REPEAT);
+
+        texture2d_array(texture2d_array const &) = delete;
+        texture2d_array(texture2d_array &&other) noexcept { swap(other); }
+        texture2d_array &operator=(texture2d_array const &) = delete;
+        texture2d_array &operator=(texture2d_array &&other) noexcept
+        {
+            swap(other);
+            return *this;
+        }
+
+        ~texture2d_array()
+        {
+            if (handle_ != 0)
+            {
+                glDeleteTextures(1, &handle_);
+            }
+        }
+
+        void swap(texture2d_array &other) noexcept
+        {
+            std::swap(handle_, other.handle_);
+            std::swap(width_, other.width_);
+            std::swap(height_, other.height_);
+            std::swap(internal_format_, other.internal_format_);
+        }
+
+        void bind()
+        {
+            glBindTexture(GL_TEXTURE_2D_ARRAY, handle_);
+        }
+
+        void bind_unit(GLuint unit)
+        {
+            glBindTextureUnit(unit, handle_);
+        }
+
+        void bind_image_unit(GLuint unit, image_bind_access access);
+
+        void set_border_color(glm::vec4 const& color);
+
+        GLuint handle() const noexcept
+        {
+            return handle_;
+        }
+
+        GLsizei width() const noexcept { return width_; }
+        GLsizei height() const noexcept { return height_; }
+
+    private:
+        texture2d_array() {}
+
+        GLuint handle_{0};
+        GLsizei width_{}, height_{};
+        GLenum internal_format_{};
+
+        friend class frame_buffer;
+    };
+
     class cubemap final
     {
     public:
@@ -1215,6 +1279,16 @@ namespace glwrap
 
         frame_buffer(std::vector<texture2d> &&color_textures, texture2d &&depth_texture, GLsizei width, GLsizei height, GLsizei multisamples = 0);
 
+        frame_buffer(std::vector<texture2d_array> &&color_textures, GLsizei width, GLsizei height, GLsizei multisamples = 0)
+            : frame_buffer(std::move(color_textures), texture2d(width, height, multisamples, GL_DEPTH_COMPONENT32F), width, height, multisamples)
+        { }
+
+        frame_buffer(std::vector<texture2d_array> &&color_textures, texture2d &&depth_texture, GLsizei width, GLsizei height, GLsizei multisamples = 0);
+
+        frame_buffer(std::vector<texture2d> &&color_textures, texture2d_array &&depth_texture, GLsizei width, GLsizei height, GLsizei multisamples = 0);
+
+        frame_buffer(std::vector<texture2d_array> &&color_textures, texture2d_array &&depth_texture, GLsizei width, GLsizei height, GLsizei multisamples = 0);
+
         frame_buffer(GLsizei width, GLsizei height, GLsizei multisamples = 0, bool is_hdr = false);
 
         frame_buffer(size_t target_count, GLsizei width, GLsizei height, GLsizei multisamples = 0, bool is_hdr = false);
@@ -1241,9 +1315,15 @@ namespace glwrap
 
         texture2d &color_texture();
 
+        texture2d_array &color_texture_array();
+
         texture2d &color_texture_at(size_t index);
 
+        texture2d_array &color_texture_array_at(size_t index);
+
         texture2d &depth_texture();
+
+        texture2d_array &depth_texture_array();
 
         void draw_buffers(std::span<size_t> indexes);
 

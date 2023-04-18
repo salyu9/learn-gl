@@ -21,10 +21,13 @@ struct DirLight
 {
     vec3 dir;
     vec3 color;
-    mat4 lightSpaceMat;
-    sampler2D shadowMap;
+    int cascadeCount;
+    float cascadePlaneDistances[8];
+    mat4 lightSpaceMats[8];
+    sampler2DArray shadowMap;
 };
 
+uniform mat4 view;
 uniform vec3 viewPosition;
 uniform Light lights[4];
 uniform int lightCount;
@@ -35,6 +38,30 @@ uniform bool renderBright;
 
 out vec4 FragColor;
 out vec4 BrightColor;
+
+float calcShadow(vec4 lightSpacePosition, int layer, float bias)
+{
+    vec3 coords = (lightSpacePosition.xyz / lightSpacePosition.w) * 0.5 + 0.5;
+    float currentDepth = coords.z;
+    if (currentDepth > 1) {
+        return 0;
+    }
+
+    float shadow = 0.0;
+    vec2 texelSize = 1.0 / textureSize(dirLight.shadowMap, 0).xy;
+    for (int x = -1; x <= 1; ++x)
+    {
+        for (int y = -1; y <= 1; ++y)
+        {
+            float pcfDepth = texture(dirLight.shadowMap, vec3(coords.xy + vec2(x, y) * texelSize, layer)).r; 
+            shadow += currentDepth - bias > pcfDepth ? 1 : 0;
+        }
+    }
+    shadow /= 9.0;
+
+    return shadow;
+
+}
 
 void main()
 {
@@ -63,9 +90,30 @@ void main()
     // ---- dir light ----
     if (hasDirLight) {
         vec3 lightDir = normalize(dirLight.dir);
-        result += dirLight.color * max(dot(lightDir, normal), 0) * diffuse;
+        vec3 rawLight = vec3(0);
+        rawLight += dirLight.color * max(dot(lightDir, normal), 0) * diffuse;
         vec3 h = normalize(lightDir + viewDir);
-        result += dirLight.color * pow(max(dot(h, normal), 0), 32.0) * specular;
+        rawLight += dirLight.color * pow(max(dot(h, normal), 0), 32.0) * specular;
+
+        //float bias = max(0.05 * (1 - dot(fsInput.normal, lightDir)), 0.005);
+        float bias = 0;
+
+        // calc shadow level
+        vec4 viewSpacePosition = view * vec4(fsInput.position, 1.0);
+        float depth = abs(viewSpacePosition.z);
+        int layer = -1;
+        for (int i = 0; i < dirLight.cascadeCount; ++i) {
+            if (depth <= dirLight.cascadePlaneDistances[i]) {
+                layer = i;
+                break;
+            }
+        }
+        if (layer < 0) {
+            layer = dirLight.cascadeCount - 1;
+        }
+
+        float shadow = calcShadow(dirLight.lightSpaceMats[layer] * vec4(fsInput.position, 1.0), layer, bias);
+        result += rawLight * (1.0 - shadow);
     }
 
     result += ambientLight * diffuse;
