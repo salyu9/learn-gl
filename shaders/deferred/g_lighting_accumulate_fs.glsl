@@ -1,6 +1,6 @@
 #version 330 core
 
-uniform sampler2D depthTexture;
+uniform sampler2D inputPosition;
 uniform sampler2D inputNormal;
 uniform sampler2D input1;
 uniform sampler2D input2;
@@ -16,19 +16,8 @@ uniform Light light;
 
 uniform vec3 viewPos;
 uniform vec2 frameSize;
-uniform mat4 inverseViewProjection;
 
 out vec4 FragColor;
-
-vec3 reconstructPosition(float projectedZ)
-{
-    float z = projectedZ * 2.0 - 1.0; // z/w
-    vec2 xy = gl_FragCoord.xy / frameSize * 2.0 - 1.0;
-    vec4 ndc = vec4(xy, z, 1);
-    vec4 posInView = inverseViewProjection * ndc;
-    vec3 position = posInView.xyz / posInView.w;
-    return position;
-}
 
 vec3 decodeOctahedral(vec2 n)
 {
@@ -39,9 +28,8 @@ vec3 decodeOctahedral(vec2 n)
 
 void main()
 {
-
     vec2 texCoords = gl_FragCoord.xy / frameSize;
-    vec3 position = reconstructPosition(texture(depthTexture, texCoords).r);
+    vec3 position = texture(inputPosition, texCoords).rgb;
 
     vec3 lightDiff = light.position - position;
     float dist = length(lightDiff);

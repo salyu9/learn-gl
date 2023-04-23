@@ -158,6 +158,16 @@ namespace utils
 
     glwrap::vertex_array& get_quad_varray();
 
+    struct plane_vertex_t
+    {
+        using vertex_desc_t = std::tuple<glm::vec3, glm::vec3, glm::vec2>;
+        glm::vec3 pos;
+        glm::vec3 norm;
+        glm::vec2 tex;
+    };
+
+    glwrap::vertex_array& get_plane_varray();
+
     glwrap::vertex_array& get_skybox();
 
     /*! \brief Create UV sphere vertex_array
@@ -232,6 +242,11 @@ namespace utils
     std::array<glwrap::shader_uniform, N> make_uniform_array(glwrap::shader_program & program, std::string const& name)
     {
         return details::make_uniform_array_impl<N>(program, name, std::make_index_sequence<N>());
+    }
+
+    template <typename T, typename U>
+    auto lerp(T && a, T && b, U && t) {
+        return a * (1- t) + b * t;
     }
 }
 

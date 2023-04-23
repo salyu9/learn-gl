@@ -317,7 +317,7 @@ namespace glwrap
         }
 
         template <typename... VertexBuffers>
-        explicit vertex_array(VertexBuffers &&... buffers) : vertex_array()
+        explicit vertex_array(VertexBuffers &&...buffers) : vertex_array()
         {
             this->attach_vbuffers(std::forward<VertexBuffers>(buffers)...);
         }
@@ -384,13 +384,13 @@ namespace glwrap
             glDisableVertexArrayAttrib(handle_, index);
         }
 
-        void draw(draw_mode mode)
+        void draw(draw_mode mode = draw_mode::triangles)
         {
             if (ibuffer_.has_value())
             {
                 draw(mode, 0, icount_);
             }
-            else 
+            else
             {
                 if (!vcount_.has_value())
                 {
@@ -414,6 +414,11 @@ namespace glwrap
             }
         }
 
+        void draw(GLint start, GLsizei count)
+        {
+            draw(draw_mode::triangles, start, count);
+        }
+
         void draw_instanced(draw_mode mode, GLsizei instance_count)
         {
             if (ibuffer_.has_value())
@@ -430,6 +435,11 @@ namespace glwrap
             }
         }
 
+        void draw_instanced(GLsizei instance_count)
+        {
+            draw_instanced(draw_mode::triangles, instance_count);
+        }
+
         void draw_instanced(draw_mode mode, GLint start, GLsizei count, GLsizei instance_count)
         {
             glBindVertexArray(handle_);
@@ -444,10 +454,15 @@ namespace glwrap
             }
         }
 
+        void draw_instanced(GLint start, GLsizei count, GLsizei instance_count)
+        {
+            draw_instanced(draw_mode::triangles, start, count, instance_count);
+        }
+
         GLuint handle() const noexcept { return handle_; }
 
         template <typename Vertex>
-        size_t attach_vbuffer(vertex_buffer<Vertex> & vbuffer)
+        size_t attach_vbuffer(vertex_buffer<Vertex> &vbuffer)
         {
             auto index = vbuffers_.size();
             vcount_ = vcount_.has_value() ? std::min(vcount_.value(), vbuffer.size()) : vbuffer.size();
@@ -457,7 +472,7 @@ namespace glwrap
         }
 
         template <typename Vertex>
-        size_t attach_vbuffer(vertex_buffer<Vertex> && moved_vbuffer)
+        size_t attach_vbuffer(vertex_buffer<Vertex> &&moved_vbuffer)
         {
             auto holded_ptr = std::make_unique<vertex_buffer<Vertex>>(std::move(moved_vbuffer));
             auto index = vbuffers_.size();
@@ -468,7 +483,7 @@ namespace glwrap
             return index;
         }
 
-        template <typename ...VertexBuffers>
+        template <typename... VertexBuffers>
         void attach_vbuffers(VertexBuffers &&...vbuffers)
         {
             (attach_vbuffer(std::forward<VertexBuffers>(vbuffers)), ...);
@@ -505,7 +520,6 @@ namespace glwrap
         }
 
     private:
-
         GLuint handle_{};
         std::vector<GLuint> vbuffers_{};
         std::optional<GLsizei> vcount_{};
@@ -596,7 +610,8 @@ namespace glwrap
         }
 
         template <typename T>
-        struct extract_vertex_type{
+        struct extract_vertex_type
+        {
         };
 
         template <typename T>
@@ -694,7 +709,7 @@ namespace glwrap
             return shader(handle);
         }
 
-        static shader compile_file(std::filesystem::path const& path, shader_type type)
+        static shader compile_file(std::filesystem::path const &path, shader_type type)
         {
             try
             {
@@ -734,6 +749,11 @@ namespace glwrap
         void set_float(GLfloat v)
         {
             glProgramUniform1f(program_handle_, location_, v);
+        }
+
+        void set_floats(std::span<const GLfloat> v)
+        {
+            glProgramUniform1fv(program_handle_, location_, v.size(), v.data());
         }
 
         GLboolean get_bool() const
@@ -784,6 +804,11 @@ namespace glwrap
             glProgramUniform2fv(program_handle_, location_, 1, value_ptr(v));
         }
 
+        void set_vec2s(std::span<const glm::vec2> v)
+        {
+            glProgramUniform2fv(program_handle_, location_, v.size(), value_ptr(*v.data()));
+        }
+
         glm::vec3 get_vec3() const
         {
             glm::vec3 res;
@@ -796,6 +821,11 @@ namespace glwrap
             glProgramUniform3fv(program_handle_, location_, 1, value_ptr(v));
         }
 
+        void set_vec3s(std::span<const glm::vec3> v)
+        {
+            glProgramUniform3fv(program_handle_, location_, v.size(), value_ptr(*v.data()));
+        }
+
         glm::vec4 get_vec4() const
         {
             glm::vec4 res;
@@ -806,6 +836,11 @@ namespace glwrap
         void set_vec4(glm::vec4 v)
         {
             glProgramUniform4fv(program_handle_, location_, 1, value_ptr(v));
+        }
+
+        void set_vec4s(std::span<const glm::vec4> v)
+        {
+            glProgramUniform4fv(program_handle_, location_, v.size(), value_ptr(*v.data()));
         }
 
         glm::mat3 get_mat3() const
@@ -853,7 +888,7 @@ namespace glwrap
 
         template <>
         glm::vec2 get<glm::vec2>() const { return get_vec2(); }
-        void set(glm::vec2 const& v) { set_vec2(v); }
+        void set(glm::vec2 const &v) { set_vec2(v); }
 
         template <>
         glm::vec3 get<glm::vec3>() const { return get_vec3(); }
@@ -879,7 +914,8 @@ namespace glwrap
         {
             if (this->location_ < 0)
             {
-                std::cout << std::format("Cannot find uniform \"{}\"", name) << std::endl;
+                auto err = glGetError();
+                std::cout << std::format("Cannot find uniform \"{}\", err = 0x{:04x}", name, err) << std::endl;
             }
         }
         GLuint program_handle_;
@@ -943,6 +979,14 @@ namespace glwrap
             return shader_uniform(handle_, name);
         }
 
+        template <typename T>
+        shader_uniform uniform(std::string_view name, T && init_value)
+        {
+            shader_uniform u{handle_, name};
+            u.set(std::forward<T>(init_value));
+            return u;
+        }
+
         GLuint handle() const noexcept { return handle_; }
 
     private:
@@ -971,11 +1015,12 @@ namespace glwrap
 
     namespace details
     {
-        inline void apply_uniform_presets(shader_program & prog)
-        { }
+        inline void apply_uniform_presets(shader_program &prog)
+        {
+        }
 
         template <typename T, typename... TRest>
-        inline void apply_uniform_presets(shader_program & prog, std::string_view name, T&& value, TRest&&...rest)
+        inline void apply_uniform_presets(shader_program &prog, std::string_view name, T &&value, TRest &&...rest)
         {
             prog.uniform(name).set(std::forward<T>(value));
             apply_uniform_presets(prog, std::forward<TRest>(rest)...);
@@ -991,12 +1036,11 @@ namespace glwrap
             shader::compile_file(fragment_shader_path, shader_type::fragment)};
     }
 
-    template <typename ...T>
+    template <typename... T>
     inline shader_program make_vf_program(
         std::filesystem::path const &vertex_shader_path,
         std::filesystem::path const &fragment_shader_path,
-        T&& ...uniform_presets
-    )
+        T &&...uniform_presets)
     {
         auto prog = make_vf_program(vertex_shader_path, fragment_shader_path);
         details::apply_uniform_presets(prog, std::forward<T>(uniform_presets)...);
@@ -1014,12 +1058,12 @@ namespace glwrap
             shader::compile_file(fragment_shader_path, shader_type::fragment)};
     }
 
-    template <typename ...T>
+    template <typename... T>
     inline shader_program make_vgf_program(
         std::filesystem::path const &vertex_shader_path,
         std::filesystem::path const &geometry_shader_path,
         std::filesystem::path const &fragment_shader_path,
-        T&& ...uniform_presets)
+        T &&...uniform_presets)
     {
         auto prog = make_vgf_program(vertex_shader_path, geometry_shader_path, fragment_shader_path);
         details::apply_uniform_presets(prog, std::forward<T>(uniform_presets)...);
@@ -1034,7 +1078,7 @@ namespace glwrap
     template <typename... T>
     inline shader_program make_compute_program(
         std::filesystem::path const &compute_shader_path,
-        T&& ...uniform_presets)
+        T &&...uniform_presets)
     {
         auto prog = make_compute_program(compute_shader_path);
         details::apply_uniform_presets(prog, std::forward<T>(uniform_presets)...);
@@ -1079,6 +1123,8 @@ namespace glwrap
         explicit texture2d(std::filesystem::path const &filename, bool srgb = false, texture2d_elem_type elem_type = texture2d_elem_type::u8,
                            texture2d_format format = texture2d_format::unspecified, GLenum wrap_mode = GL_REPEAT);
 
+        texture2d(GLsizei width, GLsizei height, GLenum internal_format, GLenum format, GLenum type, GLenum wrap_mode, const void *data);
+
         texture2d(texture2d const &) = delete;
         texture2d(texture2d &&other) noexcept { swap(other); }
         texture2d &operator=(texture2d const &) = delete;
@@ -1114,9 +1160,14 @@ namespace glwrap
             glBindTextureUnit(unit, handle_);
         }
 
+        static void unbind_unit(GLuint unit)
+        {
+            glBindTextureUnit(unit, 0);
+        }
+
         void bind_image_unit(GLuint unit, image_bind_access access);
 
-        void set_border_color(glm::vec4 const& color);
+        void set_border_color(glm::vec4 const &color);
 
         GLuint handle() const noexcept
         {
@@ -1180,7 +1231,7 @@ namespace glwrap
 
         void bind_image_unit(GLuint unit, image_bind_access access);
 
-        void set_border_color(glm::vec4 const& color);
+        void set_border_color(glm::vec4 const &color);
 
         GLuint handle() const noexcept
         {
@@ -1212,19 +1263,20 @@ namespace glwrap
             std::filesystem::path const &front,
             GLenum internal_format = GL_SRGB8);
 
-        explicit cubemap(std::filesystem::path const &folder, std::string const& file_ext, GLenum internal_format = GL_SRGB8)
-         : cubemap(folder / ("right" + file_ext),
-                   folder / ("left" + file_ext),
-                   folder / ("top" + file_ext),
-                   folder / ("bottom" + file_ext),
-                   folder / ("front" + file_ext),
-                   folder / ("back" + file_ext),
-                   internal_format)
-        { }
+        explicit cubemap(std::filesystem::path const &folder, std::string const &file_ext, GLenum internal_format = GL_SRGB8)
+            : cubemap(folder / ("right" + file_ext),
+                      folder / ("left" + file_ext),
+                      folder / ("top" + file_ext),
+                      folder / ("bottom" + file_ext),
+                      folder / ("front" + file_ext),
+                      folder / ("back" + file_ext),
+                      internal_format)
+        {
+        }
 
         explicit cubemap(GLsizei size, GLenum internal_format = GL_RGBA16F, int mipmap_levels = 0);
 
-        cubemap(cubemap&& other) noexcept
+        cubemap(cubemap &&other) noexcept
         {
             this->swap(other);
         }
@@ -1239,7 +1291,7 @@ namespace glwrap
 
         static cubemap from_single_texture(texture2d &texture, GLsizei size, GLenum internal_format = GL_RGBA16F);
 
-        cubemap& operator= (cubemap&& other) noexcept
+        cubemap &operator=(cubemap &&other) noexcept
         {
             this->swap(other);
             return *this;
@@ -1256,7 +1308,7 @@ namespace glwrap
 
         GLuint handle() { return handle_; }
 
-        void swap(cubemap & other)
+        void swap(cubemap &other)
         {
             std::swap(handle_, other.handle_);
             std::swap(internal_format_, other.internal_format_);
@@ -1275,19 +1327,39 @@ namespace glwrap
     public:
         frame_buffer(std::vector<texture2d> &&color_textures, GLsizei width, GLsizei height, GLsizei multisamples = 0)
             : frame_buffer(std::move(color_textures), texture2d(width, height, multisamples, GL_DEPTH_COMPONENT32F), width, height, multisamples)
-        { }
+        {
+        }
 
         frame_buffer(std::vector<texture2d> &&color_textures, texture2d &&depth_texture, GLsizei width, GLsizei height, GLsizei multisamples = 0);
 
         frame_buffer(std::vector<texture2d_array> &&color_textures, GLsizei width, GLsizei height, GLsizei multisamples = 0)
             : frame_buffer(std::move(color_textures), texture2d(width, height, multisamples, GL_DEPTH_COMPONENT32F), width, height, multisamples)
-        { }
+        {
+        }
 
         frame_buffer(std::vector<texture2d_array> &&color_textures, texture2d &&depth_texture, GLsizei width, GLsizei height, GLsizei multisamples = 0);
 
         frame_buffer(std::vector<texture2d> &&color_textures, texture2d_array &&depth_texture, GLsizei width, GLsizei height, GLsizei multisamples = 0);
 
         frame_buffer(std::vector<texture2d_array> &&color_textures, texture2d_array &&depth_texture, GLsizei width, GLsizei height, GLsizei multisamples = 0);
+
+        frame_buffer(texture2d &&color_texture, texture2d &&depth_texture, GLsizei width, GLsizei height, GLsizei multisamples = 0);
+
+        frame_buffer(texture2d &&color_texture, GLsizei width, GLsizei height, GLsizei multisamples = 0)
+            : frame_buffer(std::move(color_texture), texture2d(width, height, multisamples, GL_DEPTH_COMPONENT32F), width, height, multisamples)
+        {
+        }
+
+        frame_buffer(texture2d_array &&color_texture, texture2d &&depth_texture, GLsizei width, GLsizei height, GLsizei multisamples = 0);
+
+        frame_buffer(texture2d_array &&color_texture, GLsizei width, GLsizei height, GLsizei multisamples = 0)
+            : frame_buffer(std::move(color_texture), texture2d(width, height, multisamples, GL_DEPTH_COMPONENT32F), width, height, multisamples)
+        {
+        }
+
+        frame_buffer(texture2d &&color_texture, texture2d_array &&depth_texture, GLsizei width, GLsizei height, GLsizei multisamples = 0);
+
+        frame_buffer(texture2d_array &&color_texture, texture2d_array &&depth_texture, GLsizei width, GLsizei height, GLsizei multisamples = 0);
 
         frame_buffer(GLsizei width, GLsizei height, GLsizei multisamples = 0, bool is_hdr = false);
 

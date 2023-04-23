@@ -13,18 +13,23 @@ uniform mat4 normalMat;
 
 out VS_OUTPUT
 {
+    vec3 position;
     vec2 texCoords;
     mat3 tbn;
 } vsOutput;
 
 void main()
 {
-    gl_Position = projection * view * model * vec4(aPosition, 1);
+    vec4 position = model * vec4(aPosition, 1);
 
+    vsOutput.position = position.xyz / position.w;
     vsOutput.texCoords = aTexCoords;
-    
+
     vec3 normal = normalize((normalMat * vec4(aNormal, 0)).xyz);
     vec3 tangent = normalize((model * vec4(aTangent, 0)).xyz);
     vec3 bitangent = normalize((model * vec4(aBitangent, 0)).xyz);
+    
     vsOutput.tbn = mat3(tangent, bitangent, normal);
+
+    gl_Position = projection * view * position;
 }

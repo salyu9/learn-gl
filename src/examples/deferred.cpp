@@ -4,6 +4,8 @@
 #include "glwrap.hpp"
 #include "common_obj.hpp"
 
+#include "imgui.h"
+
 using namespace glwrap;
 using namespace std::literals;
 
@@ -15,10 +17,11 @@ public:
         for (int i = 0; i < lights_.size(); ++i)
         {
             auto &light = lights_[i];
-            auto uniform = light_uniform_t{g_lighting_program_, i};
-            uniform.set(light);
+            light_uniform_t{g_lighting_program_, i}.set(light);
+            light_uniform_t{g_lighting_no_position_program_, i}.set(light);
         }
         g_lighting_program_.uniform("lightCount").set_int(light_count);
+        g_lighting_no_position_program_.uniform("lightCount").set_int(light_count);
     }
 
     std::optional<camera> get_camera() override
@@ -30,15 +33,9 @@ public:
 
     void reset_frame_buffer(GLsizei width, GLsizei height) override
     {
-        std::vector<texture2d> colors;
-        colors.emplace_back(width, height, 0, GL_RG16_SNORM); // octahedral normal
-        colors.emplace_back(width, height, 0, GL_RGB8);       // albedo
-        colors.emplace_back(width, height, 0, GL_RGB8);       // specular
-
-        g_buffer_.emplace(std::move(colors), width, height, 0);
-        g_buffer_.value().draw_buffers({0, 1, 2});
-
-        post_buffer_.emplace(width, height, 0, true);
+        screen_width_ = width;
+        screen_height_ = height;
+        reset_frame_buffer();
     }
 
     void switch_state(int i) override
@@ -50,10 +47,10 @@ public:
         }
     }
 
-    std::vector<std::string> const& get_states() override
+    std::vector<std::string> const &get_states() override
     {
         static std::vector<std::string> states{
-            "single_pass",
+            "single pass",
             "accumulate",
             "position",
             "normal",
@@ -64,7 +61,20 @@ public:
         return states;
     }
 
-    void draw(glm::mat4 const &projection, camera &cam)
+    void draw_gui() override
+    {
+        if (ImGui::Checkbox("Reconstruct Position", &reconstruct_position_))
+        {
+            reset_frame_buffer();
+        }
+        float f = post_exposure_.get_float();
+        if (ImGui::SliderFloat("Exposure", &f, 0.1f, 5.0f))
+        {
+            post_exposure_.set(f);
+        }
+    }
+
+    void draw(glm::mat4 const &projection, camera &cam) override
     {
 
         auto &gb = g_buffer_.value();
@@ -73,19 +83,19 @@ public:
 
         gb.bind();
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-        g_buffer_program_.use();
+        (reconstruct_position_ ? g_buffer_no_position_program_ : g_buffer_program_).use();
 
         glEnable(GL_DEPTH_TEST);
         auto view = cam.view();
-        g_projection_.set_mat4(projection);
-        g_view_.set_mat4(view);
+        (reconstruct_position_ ? g_no_position_projection_ : g_projection_).set_mat4(projection);
+        (reconstruct_position_ ? g_no_position_view_ : g_view_).set_mat4(view);
 
         for (auto &pos : backpack_positions_)
         {
             auto model = glm::translate(glm::mat4(1), pos);
 
-            g_model_.set_mat4(model);
-            g_normal_mat_.set_mat4(glm::transpose(glm::inverse(model)));
+            (reconstruct_position_ ? g_no_position_model_ : g_model_).set_mat4(model);
+            (reconstruct_position_ ? g_no_position_normal_mat_ : g_normal_mat_).set_mat4(glm::transpose(glm::inverse(model)));
             for (auto &mesh : backpack_.meshes())
             {
                 mesh.get_texture(texture_type::diffuse).bind_unit(0);
@@ -106,14 +116,24 @@ public:
         if (draw_type_ == draw_type::single_pass)
         {
             // lighting pass
-            gb.depth_texture().bind_unit(0);
-            gb.color_texture_at(0).bind_unit(1);
-            gb.color_texture_at(1).bind_unit(2);
-            gb.color_texture_at(2).bind_unit(3);
-            g_lighting_program_.use();
-            lighting_inverse_view_projection_.set_mat4(glm::inverse(projection * view));
-            lighting_view_pos_.set_vec3(cam.position());
-            lighting_frame_size_.set_vec2({gb.width(), gb.height()});
+            if (reconstruct_position_)
+            {
+                gb.depth_texture().bind_unit(0);
+                gb.color_texture_at(0).bind_unit(1);
+                gb.color_texture_at(1).bind_unit(2);
+                gb.color_texture_at(2).bind_unit(3);
+                lighting_no_position_inverse_view_projection_.set_mat4(glm::inverse(projection * view));
+                lighting_no_position_frame_size_.set_vec2({gb.width(), gb.height()});
+            }
+            else
+            {
+                gb.color_texture_at(0).bind_unit(0);
+                gb.color_texture_at(1).bind_unit(1);
+                gb.color_texture_at(2).bind_unit(2);
+                gb.color_texture_at(3).bind_unit(3);
+            }
+            (reconstruct_position_ ? g_lighting_no_position_program_ : g_lighting_program_).use();
+            (reconstruct_position_ ? lighting_no_position_view_pos_ : lighting_view_pos_).set_vec3(cam.position());
             quad_varray.draw(draw_mode::triangles);
 
             // draw light box
@@ -136,26 +156,36 @@ public:
         else if (draw_type_ == draw_type::accumulate)
         {
             // lighting pass
-            gb.depth_texture().bind_unit(0);
-            gb.color_texture_at(0).bind_unit(1);
-            gb.color_texture_at(1).bind_unit(2);
-            gb.color_texture_at(2).bind_unit(3);
-            g_lighting_accumulate_program_.use();
-            accumulate_projection_.set_mat4(projection);
-            accumulate_inverse_view_projection_.set_mat4(glm::inverse(projection * view));
-            accumulate_view_pos_.set_vec3(cam.position());
-            accumulate_frame_size_.set_vec2({gb.width(), gb.height()});
+            if (reconstruct_position_)
+            {
+                gb.depth_texture().bind_unit(0);
+                gb.color_texture_at(0).bind_unit(1);
+                gb.color_texture_at(1).bind_unit(2);
+                gb.color_texture_at(2).bind_unit(3);
+                accumulate_no_position_inverse_view_projection_.set_mat4(glm::inverse(projection * view));
+            }
+            else
+            {
+                gb.color_texture_at(0).bind_unit(0);
+                gb.color_texture_at(1).bind_unit(1);
+                gb.color_texture_at(2).bind_unit(2);
+                gb.color_texture_at(3).bind_unit(3);
+            }
+            (reconstruct_position_ ? g_lighting_no_position_accumulate_program_ : g_lighting_accumulate_program_).use();
+            (reconstruct_position_ ? accumulate_no_position_projection_ : accumulate_projection_).set_mat4(projection);
+            (reconstruct_position_ ? accumulate_no_position_view_pos_ : accumulate_view_pos_).set_vec3(cam.position());
+            (reconstruct_position_ ? accumulate_no_position_frame_size_ : accumulate_frame_size_).set_vec2({gb.width(), gb.height()});
             glCullFace(GL_FRONT);
             glEnable(GL_BLEND);
             glBlendFunc(GL_ONE, GL_ONE);
             for (auto &light : lights_)
             {
                 auto model = glm::scale(glm::translate(glm::mat4(1), light.position), glm::vec3(light.range));
-                accumulate_view_model_.set_mat4(view * model);
-                accumulate_light_position_.set_vec3(light.position);
-                accumulate_light_attenuation_.set_vec3(light.attenuation);
-                accumulate_light_color_.set_vec3(light.color);
-                accumulate_light_range_.set_float(light.range);
+                (reconstruct_position_ ? accumulate_no_position_view_model_ : accumulate_view_model_).set_mat4(view * model);
+                (reconstruct_position_ ? accumulate_no_position_light_position_ : accumulate_light_position_).set_vec3(light.position);
+                (reconstruct_position_ ? accumulate_no_position_light_attenuation_ : accumulate_light_attenuation_).set_vec3(light.attenuation);
+                (reconstruct_position_ ? accumulate_no_position_light_color_ : accumulate_light_color_).set_vec3(light.color);
+                (reconstruct_position_ ? accumulate_no_position_light_range_ : accumulate_light_range_).set_float(light.range);
                 sphere_.draw(draw_mode::triangles);
             }
             glCullFace(GL_BACK);
@@ -181,31 +211,39 @@ public:
         else if (draw_type_ == draw_type::position)
         {
             frame_buffer::unbind_all();
-            g_debug_position_program_.use();
-            g_debug_inverse_view_projection_.set_mat4(glm::inverse(projection * view));
-            g_debug_frame_size_.set_vec2({gb.width(), gb.height()});
-            gb.depth_texture().bind_unit(0);
+            if (reconstruct_position_)
+            {
+                g_debug_reconstruct_position_program_.use();
+                g_debug_reconstruct_position_inverse_view_projection_.set_mat4(glm::inverse(projection * view));
+                g_debug_reconstruct_position_frame_size_.set_vec2({gb.width(), gb.height()});
+                gb.depth_texture().bind_unit(0);
+            }
+            else
+            {
+                g_debug_position_program_.use();
+                gb.color_texture_at(0).bind_unit(0);
+            }
             quad_varray.draw(draw_mode::triangles);
         }
         else if (draw_type_ == draw_type::normal)
         {
             frame_buffer::unbind_all();
             g_debug_normal_program_.use();
-            gb.color_texture_at(0).bind_unit(0);
+            gb.color_texture_at(reconstruct_position_ ? 0 : 1).bind_unit(0);
             quad_varray.draw(draw_mode::triangles);
         }
         else if (draw_type_ == draw_type::albedo)
         {
             frame_buffer::unbind_all();
             post_program_.use();
-            gb.color_texture_at(1).bind_unit(0);
+            gb.color_texture_at(reconstruct_position_ ? 1 : 2).bind_unit(0);
             quad_varray.draw(draw_mode::triangles);
         }
         else if (draw_type_ == draw_type::specular)
         {
             frame_buffer::unbind_all();
             post_program_.use();
-            gb.color_texture_at(2).bind_unit(0);
+            gb.color_texture_at(reconstruct_position_ ? 2 : 3).bind_unit(0);
             quad_varray.draw(draw_mode::triangles);
         }
         else if (draw_type_ == draw_type::light_range)
@@ -213,7 +251,7 @@ public:
             // lighting pass
             pb.bind();
             post_program_.use();
-            gb.color_texture_at(2).bind_unit(0);
+            gb.color_texture_at(reconstruct_position_ ? 2 : 3).bind_unit(0);
             quad_varray.draw(draw_mode::triangles);
 
             // draw light box
@@ -266,8 +304,8 @@ private:
     };
 
     shader_program g_buffer_program_{make_vf_program(
-        "shaders/g_buffer_vs.glsl"_path,
-        "shaders/g_buffer_fs.glsl"_path,
+        "shaders/deferred/g_buffer_vs.glsl"_path,
+        "shaders/deferred/g_buffer_fs.glsl"_path,
         "diffuseTexture", 0,
         "specularTexture", 1,
         "normalTexture", 2)};
@@ -276,21 +314,41 @@ private:
     shader_uniform g_view_{g_buffer_program_.uniform("view")};
     shader_uniform g_normal_mat_{g_buffer_program_.uniform("normalMat")};
 
+    shader_program g_buffer_no_position_program_{make_vf_program(
+        "shaders/deferred/g_buffer_no_position_vs.glsl"_path,
+        "shaders/deferred/g_buffer_no_position_fs.glsl"_path,
+        "diffuseTexture", 0,
+        "specularTexture", 1,
+        "normalTexture", 2)};
+    shader_uniform g_no_position_projection_{g_buffer_no_position_program_.uniform("projection")};
+    shader_uniform g_no_position_model_{g_buffer_no_position_program_.uniform("model")};
+    shader_uniform g_no_position_view_{g_buffer_no_position_program_.uniform("view")};
+    shader_uniform g_no_position_normal_mat_{g_buffer_no_position_program_.uniform("normalMat")};
+
     shader_program g_lighting_program_{make_vf_program(
         "shaders/base/fbuffer_vs.glsl"_path,
-        "shaders/g_lighting_fs.glsl"_path,
-        "depthTexture", 0,
+        "shaders/deferred/g_lighting_fs.glsl"_path,
+        "inputPosition", 0,
         "inputNormal", 1,
         "input1", 2,
         "input2", 3)};
     shader_uniform lighting_view_pos_{g_lighting_program_.uniform("viewPos")};
-    shader_uniform lighting_frame_size_{g_lighting_program_.uniform("frameSize")};
-    shader_uniform lighting_inverse_view_projection_{g_lighting_program_.uniform("inverseViewProjection")};
+
+    shader_program g_lighting_no_position_program_{make_vf_program(
+        "shaders/base/fbuffer_vs.glsl"_path,
+        "shaders/deferred/g_lighting_no_position_fs.glsl"_path,
+        "depthTexture", 0,
+        "inputNormal", 1,
+        "input1", 2,
+        "input2", 3)};
+    shader_uniform lighting_no_position_view_pos_{g_lighting_no_position_program_.uniform("viewPos")};
+    shader_uniform lighting_no_position_frame_size_{g_lighting_no_position_program_.uniform("frameSize")};
+    shader_uniform lighting_no_position_inverse_view_projection_{g_lighting_no_position_program_.uniform("inverseViewProjection")};
 
     shader_program g_lighting_accumulate_program_{make_vf_program(
         "shaders/common/sphere_vs.glsl"_path,
-        "shaders/g_lighting_accumulate_fs.glsl"_path,
-        "depthTexture", 0,
+        "shaders/deferred/g_lighting_accumulate_fs.glsl"_path,
+        "inputPosition", 0,
         "inputNormal", 1,
         "input1", 2,
         "input2", 3)};
@@ -298,22 +356,43 @@ private:
     shader_uniform accumulate_view_model_{g_lighting_accumulate_program_.uniform("viewModel")};
     shader_uniform accumulate_view_pos_{g_lighting_accumulate_program_.uniform("viewPos")};
     shader_uniform accumulate_frame_size_{g_lighting_accumulate_program_.uniform("frameSize")};
-    shader_uniform accumulate_inverse_view_projection_{g_lighting_accumulate_program_.uniform("inverseViewProjection")};
     shader_uniform accumulate_light_position_{g_lighting_accumulate_program_.uniform("light.position")};
     shader_uniform accumulate_light_attenuation_{g_lighting_accumulate_program_.uniform("light.attenuation")};
     shader_uniform accumulate_light_color_{g_lighting_accumulate_program_.uniform("light.color")};
     shader_uniform accumulate_light_range_{g_lighting_accumulate_program_.uniform("light.range")};
 
+    shader_program g_lighting_no_position_accumulate_program_{make_vf_program(
+        "shaders/common/sphere_vs.glsl"_path,
+        "shaders/deferred/g_lighting_no_position_accumulate_fs.glsl"_path,
+        "depthTexture", 0,
+        "inputNormal", 1,
+        "input1", 2,
+        "input2", 3)};
+    shader_uniform accumulate_no_position_projection_{g_lighting_no_position_accumulate_program_.uniform("projection")};
+    shader_uniform accumulate_no_position_view_model_{g_lighting_no_position_accumulate_program_.uniform("viewModel")};
+    shader_uniform accumulate_no_position_view_pos_{g_lighting_no_position_accumulate_program_.uniform("viewPos")};
+    shader_uniform accumulate_no_position_frame_size_{g_lighting_no_position_accumulate_program_.uniform("frameSize")};
+    shader_uniform accumulate_no_position_inverse_view_projection_{g_lighting_no_position_accumulate_program_.uniform("inverseViewProjection")};
+    shader_uniform accumulate_no_position_light_position_{g_lighting_no_position_accumulate_program_.uniform("light.position")};
+    shader_uniform accumulate_no_position_light_attenuation_{g_lighting_no_position_accumulate_program_.uniform("light.attenuation")};
+    shader_uniform accumulate_no_position_light_color_{g_lighting_no_position_accumulate_program_.uniform("light.color")};
+    shader_uniform accumulate_no_position_light_range_{g_lighting_no_position_accumulate_program_.uniform("light.range")};
+
     shader_program g_debug_position_program_{make_vf_program(
         "shaders/base/fbuffer_vs.glsl"_path,
-        "shaders/g_debug_position_fs.glsl"_path,
+        "shaders/deferred/g_debug_position_fs.glsl"_path,
+        "inputPosition", 0)};
+
+    shader_program g_debug_reconstruct_position_program_{make_vf_program(
+        "shaders/base/fbuffer_vs.glsl"_path,
+        "shaders/deferred/g_debug_reconstruct_position_fs.glsl"_path,
         "depthTexture", 0)};
-    shader_uniform g_debug_frame_size_{g_debug_position_program_.uniform("frameSize")};
-    shader_uniform g_debug_inverse_view_projection_{g_debug_position_program_.uniform("inverseViewProjection")};
+    shader_uniform g_debug_reconstruct_position_frame_size_{g_debug_reconstruct_position_program_.uniform("frameSize")};
+    shader_uniform g_debug_reconstruct_position_inverse_view_projection_{g_debug_reconstruct_position_program_.uniform("inverseViewProjection")};
 
     shader_program g_debug_normal_program_{make_vf_program(
         "shaders/base/fbuffer_vs.glsl"_path,
-        "shaders/g_debug_normal_fs.glsl"_path,
+        "shaders/deferred/g_debug_normal_fs.glsl"_path,
         "normalTexture", 0)};
 
     shader_program g_light_range_program_{make_vf_program(
@@ -326,8 +405,8 @@ private:
     shader_program post_program_{make_vf_program(
         "shaders/base/fbuffer_vs.glsl"_path,
         "shaders/hdr_exposure_fs.glsl"_path,
-        "screenTexture", 0,
-        "exposure", 1.0f)};
+        "screenTexture", 0)};
+    shader_uniform post_exposure_{post_program_.uniform("exposure", 3.0f)};
 
     struct light_t
     {
@@ -410,6 +489,26 @@ private:
         max_value
     };
     draw_type draw_type_{};
+
+    bool reconstruct_position_{false};
+
+    GLsizei screen_width_, screen_height_;
+
+    void reset_frame_buffer()
+    {
+        std::vector<texture2d> colors;
+        if (!reconstruct_position_)
+        {
+            colors.emplace_back(screen_width_, screen_height_, 0, GL_RGB32F); // position
+        }
+        colors.emplace_back(screen_width_, screen_height_, 0, GL_RG16_SNORM); // octahedral normal
+        colors.emplace_back(screen_width_, screen_height_, 0, GL_RGB8);       // albedo
+        colors.emplace_back(screen_width_, screen_height_, 0, GL_RGB8);       // specular
+
+        g_buffer_.emplace(std::move(colors), screen_width_, screen_height_, 0);
+
+        post_buffer_.emplace(screen_width_, screen_height_, 0, true);
+    }
 };
 
 std::unique_ptr<example> create_deferred()

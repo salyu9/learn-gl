@@ -380,12 +380,13 @@ try
                 static float f = 0.0f;
                 static int counter = 0;
 
-                ImGui::Begin("Select example...");
+                ImGui::Begin("Select example...", nullptr, ImGuiWindowFlags_NoResize);
 
                 ImGui::SetWindowFontScale(content_scale_x);
+                ImGui::PushStyleVar(ImGuiStyleVar_ButtonTextAlign, {0.5f, 0.5f});
                 for (auto [name, creator] : all_examples)
                 {
-                    if (ImGui::Button(name.c_str()))
+                    if (ImGui::Button(name.c_str(), {500, 45}))
                     {
                         example_ptr = creator();
                         example_name = name;
@@ -401,6 +402,7 @@ try
                         break;
                     }
                 }
+                ImGui::PopStyleVar();
 
                 ImGui::End();
                 ImGui::Render();

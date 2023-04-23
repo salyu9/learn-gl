@@ -71,8 +71,8 @@ GLenum to_internal_format(texture2d_format format, texture2d_elem_type elem_type
     return iter->second;
 }
 
-void create_texture_resources(GLuint & handle, bool srgb, texture2d_format format, texture2d_elem_type elem_type,
-    bitmap &bmp, GLsizei &width, GLsizei &height, GLenum &internal_format, GLenum wrap_mode)
+void create_texture_resources(GLuint &handle, bool srgb, texture2d_format format, texture2d_elem_type elem_type,
+                              bitmap &bmp, GLsizei &width, GLsizei &height, GLenum &internal_format, GLenum wrap_mode)
 {
     if (format == texture2d_format::unspecified)
     {
@@ -118,6 +118,11 @@ void create_texture_resources(GLuint & handle, bool srgb, texture2d_format forma
 texture2d::texture2d(GLsizei width, GLsizei height, GLsizei multisamples, GLenum internal_format, GLenum wrap_mode)
     : width_{width}, height_{height}, internal_format_{internal_format}
 {
+    auto prev_err = glGetError();
+    if (prev_err != GL_NO_ERROR)
+    {
+        std::cout << std::format("Previous operation failed with err = 0x{:04x}", prev_err) << std::endl;
+    }
     if (multisamples == 0)
     {
         glCreateTextures(GL_TEXTURE_2D, 1, &handle_);
@@ -135,16 +140,22 @@ texture2d::texture2d(GLsizei width, GLsizei height, GLsizei multisamples, GLenum
     auto err = glGetError();
     if (err != GL_NO_ERROR)
     {
-        throw gl_error(std::format("Create texture2d failed: {:08x}", err));
+        throw gl_error(std::format("Create texture2d failed: 0x{:04x}", err));
     }
 }
 
 texture2d::texture2d(GLsizei width, GLsizei height, GLsizei multisamples, texture2d_format format, texture2d_elem_type elem_type, GLenum wrap_mode)
     : texture2d(width, height, multisamples, to_internal_format(format, elem_type), wrap_mode)
-{ }
+{
+}
 
 texture2d::texture2d(std::byte const *p, size_t size, bool srgb, texture2d_elem_type elem_type, texture2d_format format, GLenum wrap_mode)
 {
+    auto prev_err = glGetError();
+    if (prev_err != GL_NO_ERROR)
+    {
+        std::cout << std::format("Previous operation failed with err = 0x{:04x}", prev_err) << std::endl;
+    }
     auto required_channel = bitmap_channel::unspecified;
     if (format == texture2d_format::rgb)
         required_channel = bitmap_channel::rgb;
@@ -155,12 +166,17 @@ texture2d::texture2d(std::byte const *p, size_t size, bool srgb, texture2d_elem_
     auto err = glGetError();
     if (err != GL_NO_ERROR)
     {
-        throw gl_error(std::format("Create texture2d failed: {:08x}", err));
+        throw gl_error(std::format("Create texture2d failed: 0x{:04x}", err));
     }
 }
 
 texture2d::texture2d(std::filesystem::path const &filename, bool srgb, texture2d_elem_type elem_type, texture2d_format format, GLenum wrap_mode)
 {
+    auto prev_err = glGetError();
+    if (prev_err != GL_NO_ERROR)
+    {
+        std::cout << std::format("Previous operation failed with err = 0x{:04x}", prev_err) << std::endl;
+    }
     auto required_channel = bitmap_channel::unspecified;
     if (format == texture2d_format::rgb)
         required_channel = bitmap_channel::rgb;
@@ -171,7 +187,32 @@ texture2d::texture2d(std::filesystem::path const &filename, bool srgb, texture2d
     auto err = glGetError();
     if (err != GL_NO_ERROR)
     {
-        throw gl_error(std::format("Create texture2d failed: {:08x}", err));
+        throw gl_error(std::format("Create texture2d failed: 0x{:04x}", err));
+    }
+}
+
+texture2d::texture2d(GLsizei width, GLsizei height, GLenum internal_format, GLenum format, GLenum type, GLenum wrap_mode, const void *data)
+{
+    auto prev_err = glGetError();
+    if (prev_err != GL_NO_ERROR)
+    {
+        std::cout << std::format("Previous operation failed with err = 0x{:04x}", prev_err) << std::endl;
+    }
+    glCreateTextures(GL_TEXTURE_2D, 1, &handle_);
+    glTextureParameteri(handle_, GL_TEXTURE_MIN_FILTER, GL_LINEAR_MIPMAP_LINEAR);
+    glTextureParameteri(handle_, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+    glTextureParameteri(handle_, GL_TEXTURE_WRAP_S, wrap_mode);
+    glTextureParameteri(handle_, GL_TEXTURE_WRAP_T, wrap_mode);
+    glTextureStorage2D(handle_, 1, internal_format, width, height);
+    glTextureSubImage2D(handle_, 0, 0, 0, width, height, format, type, data);
+    glGenerateTextureMipmap(handle_);
+    width_ = width;
+    height_ = height;
+    internal_format_ = internal_format;
+    auto err = glGetError();
+    if (err != GL_NO_ERROR)
+    {
+        throw gl_error(std::format("Create texture2d failed: 0x{:04x}", err));
     }
 }
 
@@ -181,11 +222,11 @@ void texture2d::bind_image_unit(GLuint unit, image_bind_access access)
     auto err = glGetError();
     if (err != GL_NO_ERROR)
     {
-        throw gl_error(std::format("Cannot bind image unit: GL error={:08x}", err));
+        throw gl_error(std::format("Cannot bind image unit: GL error=0x{:04x}", err));
     }
 }
 
-void texture2d::set_border_color(glm::vec4 const& color)
+void texture2d::set_border_color(glm::vec4 const &color)
 {
     glTextureParameterfv(handle_, GL_TEXTURE_BORDER_COLOR, glm::value_ptr(color));
 }
@@ -212,13 +253,14 @@ texture2d_array::texture2d_array(GLsizei width, GLsizei height, GLsizei depth, G
     auto err = glGetError();
     if (err != GL_NO_ERROR)
     {
-        throw gl_error(std::format("Create texture2d array failed: {:08x}", err));
+        throw gl_error(std::format("Create texture2d array failed: 0x{:04x}", err));
     }
 }
 
 texture2d_array::texture2d_array(GLsizei width, GLsizei height, GLsizei depth, GLsizei multisamples, texture2d_format format, texture2d_elem_type elem_type, GLenum wrap_mode)
     : texture2d_array(width, height, depth, multisamples, to_internal_format(format, elem_type), wrap_mode)
-{ }
+{
+}
 
 void texture2d_array::bind_image_unit(GLuint unit, image_bind_access access)
 {
@@ -226,11 +268,11 @@ void texture2d_array::bind_image_unit(GLuint unit, image_bind_access access)
     auto err = glGetError();
     if (err != GL_NO_ERROR)
     {
-        throw gl_error(std::format("Cannot bind image unit: GL error={:08x}", err));
+        throw gl_error(std::format("Cannot bind image unit: GL error=0x{:04x}", err));
     }
 }
 
-void texture2d_array::set_border_color(glm::vec4 const& color)
+void texture2d_array::set_border_color(glm::vec4 const &color)
 {
     glTextureParameterfv(handle_, GL_TEXTURE_BORDER_COLOR, glm::value_ptr(color));
 }
@@ -277,12 +319,12 @@ cubemap::cubemap(std::filesystem::path const &right,
     auto err = glGetError();
     if (err != GL_NO_ERROR)
     {
-        throw gl_error(std::format("Create cube map failed, gl error = {:08x}", err));
+        throw gl_error(std::format("Create cube map failed, gl error = 0x{:04x}", err));
     }
 }
 
 cubemap::cubemap(GLsizei size, GLenum internal_format, int mipmap_levels)
-    :internal_format_{internal_format}
+    : internal_format_{internal_format}
 {
     glCreateTextures(GL_TEXTURE_CUBE_MAP, 1, &handle_);
     glTextureStorage2D(handle_, mipmap_levels > 0 ? mipmap_levels : 1, internal_format, size, size);
@@ -295,7 +337,7 @@ cubemap::cubemap(GLsizei size, GLenum internal_format, int mipmap_levels)
     {
         glGenerateTextureMipmap(handle_);
     }
-    
+
     auto err = glGetError();
     if (err != GL_NO_ERROR)
     {
@@ -305,7 +347,7 @@ cubemap::cubemap(GLsizei size, GLenum internal_format, int mipmap_levels)
 
 cubemap::cubemap() = default;
 
-cubemap cubemap::from_single_texture(texture2d & texture, GLsizei size, GLenum internal_format)
+cubemap cubemap::from_single_texture(texture2d &texture, GLsizei size, GLenum internal_format)
 {
     static auto prog = make_compute_program("shaders/compute/cubemap_mapping.glsl");
 
@@ -424,31 +466,53 @@ struct frame_buffer::frame_buffer_impl final
         }
     }
 
-    void attach_colors(std::vector<texture2d> && textures)
+    void attach_colors(std::vector<texture2d> &&textures)
     {
+        std::vector<GLenum> idx;
         for (size_t i = 0; i < textures.size(); ++i)
         {
             glNamedFramebufferTexture(handle_, GL_COLOR_ATTACHMENT0 + i, textures[i].handle(), 0);
+            idx.push_back(GL_COLOR_ATTACHMENT0 + i);
         }
         color_textures_ = std::move(textures);
+        glNamedFramebufferDrawBuffers(handle_, idx.size(), idx.data());
     }
 
-    void attach_colors(std::vector<texture2d_array> && textures)
+    void attach_colors(std::vector<texture2d_array> &&textures)
     {
+        std::vector<GLenum> idx;
         for (size_t i = 0; i < textures.size(); ++i)
         {
             glNamedFramebufferTexture(handle_, GL_COLOR_ATTACHMENT0 + i, textures[i].handle(), 0);
+            idx.push_back(GL_COLOR_ATTACHMENT0 + i);
         }
         array_color_textures_ = std::move(textures);
+        glNamedFramebufferDrawBuffers(handle_, idx.size(), idx.data());
     }
 
-    void attach_depth(texture2d && texture)
+    void attach_color(texture2d &&texture)
+    {
+        glNamedFramebufferTexture(handle_, GL_COLOR_ATTACHMENT0, texture.handle(), 0);
+        color_textures_.emplace_back(std::move(texture));
+        std::array<GLenum, 1> idx{GL_COLOR_ATTACHMENT0};
+        glNamedFramebufferDrawBuffers(handle_, idx.size(), idx.data());
+    }
+
+    void attach_color(texture2d_array &&texture)
+    {
+        glNamedFramebufferTexture(handle_, GL_COLOR_ATTACHMENT0, texture.handle(), 0);
+        array_color_textures_.emplace_back(std::move(texture));
+        std::array<GLenum, 1> idx{GL_COLOR_ATTACHMENT0};
+        glNamedFramebufferDrawBuffers(handle_, idx.size(), idx.data());
+    }
+
+    void attach_depth(texture2d &&texture)
     {
         glNamedFramebufferTexture(handle_, GL_DEPTH_ATTACHMENT, texture.handle(), 0);
         depth_texture_ = std::move(texture);
     }
 
-    void attach_depth(texture2d_array && texture)
+    void attach_depth(texture2d_array &&texture)
     {
         glNamedFramebufferTexture(handle_, GL_DEPTH_ATTACHMENT, texture.handle(), 0);
         array_depth_texture_ = std::move(texture);
@@ -502,17 +566,48 @@ frame_buffer::frame_buffer(std::vector<texture2d> &&color_textures, texture2d_ar
     impl_->check_status();
 }
 
+frame_buffer::frame_buffer(texture2d &&color_texture, texture2d &&depth_texture, GLsizei width, GLsizei height, GLsizei multisamples)
+    : impl_{std::make_unique<frame_buffer_impl>(width, height, multisamples)}
+{
+    impl_->attach_color(std::move(color_texture));
+    impl_->attach_depth(std::move(depth_texture));
+    impl_->check_status();
+}
+
+frame_buffer::frame_buffer(texture2d_array &&color_texture, texture2d &&depth_texture, GLsizei width, GLsizei height, GLsizei multisamples)
+{
+    impl_->attach_color(std::move(color_texture));
+    impl_->attach_depth(std::move(depth_texture));
+    impl_->check_status();
+}
+
+frame_buffer::frame_buffer(texture2d &&color_texture, texture2d_array &&depth_texture, GLsizei width, GLsizei height, GLsizei multisamples)
+{
+    impl_->attach_color(std::move(color_texture));
+    impl_->attach_depth(std::move(depth_texture));
+    impl_->check_status();
+}
+
+frame_buffer::frame_buffer(texture2d_array &&color_texture, texture2d_array &&depth_texture, GLsizei width, GLsizei height, GLsizei multisamples)
+{
+    impl_->attach_color(std::move(color_texture));
+    impl_->attach_depth(std::move(depth_texture));
+    impl_->check_status();
+}
+
 frame_buffer::frame_buffer(GLsizei width, GLsizei height, GLsizei multisamples, bool is_hdr)
     : frame_buffer(1, width, height, multisamples, is_hdr)
-{ }
+{
+}
 
 frame_buffer::frame_buffer(size_t target_count, GLsizei width, GLsizei height, GLsizei multisamples, bool is_hdr)
     : frame_buffer(create_frame_buffer_textures(target_count, width, height, multisamples, is_hdr), width, height, multisamples)
-{ }
+{
+}
 
 frame_buffer::frame_buffer(frame_buffer &&other) noexcept { swap(other); }
 
-frame_buffer &frame_buffer::operator = (frame_buffer && other) noexcept
+frame_buffer &frame_buffer::operator=(frame_buffer &&other) noexcept
 {
     swap(other);
     return *this;

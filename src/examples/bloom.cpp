@@ -39,7 +39,7 @@ public:
 
     void draw_gui() override
     {
-        if (ImGui::SliderFloat("Exposure", &exposure_, 0, 5))
+        if (ImGui::SliderFloat("Exposure", &exposure_, 0.1f, 5.0f))
         {
             exposure_uniform_.set_float(exposure_);
         }

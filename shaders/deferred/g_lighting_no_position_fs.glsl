@@ -28,8 +28,8 @@ vec3 reconstructPosition(float projectedZ)
     float z = projectedZ * 2.0 - 1.0; // z/w
     vec2 xy = gl_FragCoord.xy / frameSize * 2.0 - 1.0;
     vec4 ndc = vec4(xy, z, 1);
-    vec4 posInView = inverseViewProjection * ndc;
-    vec3 position = posInView.xyz / posInView.w;
+    vec4 posInWorld = inverseViewProjection * ndc;
+    vec3 position = posInWorld.xyz / posInWorld.w;
     return position;
 }
 

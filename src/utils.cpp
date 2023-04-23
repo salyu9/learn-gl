@@ -1,11 +1,13 @@
 #include "glwrap.hpp"
 #include "utils.hpp"
 
+using namespace glwrap;
+
 namespace utils
 {
-    glwrap::vertex_array& get_quad_varray()
+    vertex_array& get_quad_varray()
     {
-        static auto varray = glwrap::auto_vertex_array(glwrap::vertex_buffer<quad_vertex_t>{
+        static auto varray = auto_vertex_array(vertex_buffer<quad_vertex_t>{
             {-1.0f, 1.0f, 0.0f, 1.0f},
             {-1.0f, -1.0f, 0.0f, 0.0f},
             {1.0f, -1.0f, 1.0f, 0.0f},
@@ -16,15 +18,27 @@ namespace utils
         return varray;
     }
 
-    glwrap::vertex_array& get_skybox()
+    vertex_array& get_plane_varray()
     {
-        static auto varray = glwrap::vertex_array::load_simple_json("resources/simple_vertices/skybox.jsonc");
+        static auto varray = auto_vertex_array(vertex_buffer<plane_vertex_t>{
+            {{-0.5f, -0.5f, 0}, {0, 0, 1}, {0, 0}},
+            {{+0.5f, -0.5f, 0}, {0, 0, 1}, {1, 0}},
+            {{+0.5f, +0.5f, 0}, {0, 0, 1}, {1, 1}},
+            {{+0.5f, +0.5f, 0}, {0, 0, 1}, {1, 1}},
+            {{-0.5f, +0.5f, 0}, {0, 0, 1}, {0, 1}},
+            {{-0.5f, -0.5f, 0}, {0, 0, 1}, {0, 0}},
+        });
         return varray;
     }
 
-    glwrap::vertex_array create_uv_sphere(int slices, int stacks, bool full_information)
+    vertex_array& get_skybox()
     {
-        using namespace glwrap;
+        static auto varray = vertex_array::load_simple_json("resources/simple_vertices/skybox.jsonc");
+        return varray;
+    }
+
+    vertex_array create_uv_sphere(int slices, int stacks, bool full_information)
+    {
         if (slices < 4 || stacks < 3)
         {
             throw std::invalid_argument(std::format("Too less slices or stacks: {}, {}", slices, stacks));

@@ -212,6 +212,9 @@ struct wooden_box::wooden_box_impl
         specular_tex_.bind_unit(1);
 
         varray_.draw(draw_mode::triangles, 0, 36);
+
+        texture2d::unbind_unit(0);
+        texture2d::unbind_unit(1);
     }
 
     void set_render_bright(bool value)

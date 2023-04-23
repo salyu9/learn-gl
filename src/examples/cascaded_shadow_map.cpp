@@ -197,7 +197,6 @@ private:
 
     void draw_scene(glm::mat4x4 const &proj, camera *cam, bool shadow_casting)
     {
-        floor_tex_.bind_unit(0);
         if (shadow_casting)
         {
             shadow_cast_program_.use();
@@ -210,6 +209,7 @@ private:
         else
         {
             floor_program_.use();
+            floor_tex_.bind_unit(0);
             floor_projection_.set(proj);
             floor_view_.set(cam->view());
             floor_model_.set(glm::mat4(1.0f));
@@ -247,7 +247,7 @@ private:
         }
     }
 
-    constexpr static int shadow_map_width = 1024, shadow_map_height = 1024;
+    constexpr static int shadow_map_width = 2048, shadow_map_height = 2048;
     float screen_width_, screen_height_;
 
     frame_buffer shadow_fb_ = []
