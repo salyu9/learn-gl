@@ -44,7 +44,6 @@ public:
 class camera : public view_info
 {
 public:
-
     explicit camera(
         glm::vec3 const &position = glm::vec3(0.0f, 0.0f, 0.0f),
         glm::vec3 const &up = glm::vec3(0.0f, 1.0f, 0.0f),
@@ -52,12 +51,13 @@ public:
         float pitch = default_pitch,
         float near_z = default_near_z,
         float far_z = default_far_z) noexcept
-        : position_(position), front_(glm::vec3(0.0f, 0.0f, -1.0f)),
-          world_up_(up),
-          yaw_(yaw),
-          pitch_(pitch),
-          near_z_(near_z),
-          far_z_(far_z)
+        : position_(position), front_(glm::vec3(0.0f, 0.0f, -1.0f))
+        , world_up_(up)
+        , yaw_(yaw)
+        , pitch_(pitch)
+        , near_z_(near_z)
+        , far_z_(far_z)
+        , projection_{glm::perspective(glm::radians(zoom_), aspect_, near_z_, far_z_)}
     {
         update_camera_vectors();
     }
@@ -164,7 +164,7 @@ public:
     // Processes input received from a mouse scroll-wheel event. Only requires input on the vertical wheel-axis
     void process_mouse_scroll(float delta) noexcept
     {
-        zoom_ = std::clamp(zoom_ -= delta, min_zoom, max_zoom);
+        zoom_ = std::clamp(zoom_ - delta, min_zoom, max_zoom);
         update_camera_vectors();
     }
 
@@ -179,7 +179,7 @@ private:
     float yaw_;
     float pitch_;
     // Camera options
-    float aspect_;
+    float aspect_{1};
     float near_z_;
     float far_z_;
     float zoom_{default_zoom};

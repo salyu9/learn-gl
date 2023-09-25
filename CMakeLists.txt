@@ -2,7 +2,7 @@ cmake_minimum_required(VERSION 3.24.0)
 project(
     learn-gl
     VERSION 0.1.0
-    LANGUAGES CXX)
+    LANGUAGES C CXX)
 
 ### Require out-of-source builds
 file(TO_CMAKE_PATH "${PROJECT_BINARY_DIR}/CMakeLists.txt" LOC_PATH)
@@ -93,11 +93,25 @@ target_link_libraries(learn-gl PRIVATE glm glfw assimp nlohmann_json::nlohmann_j
 
 target_compile_features(learn-gl PUBLIC cxx_std_20)
 set_target_properties(learn-gl PROPERTIES CXX_EXTENSIONS OFF)
-if (MSVC)
+if (CMAKE_CXX_COMPILER_ID MATCHES MSVC)
     target_compile_options(learn-gl PRIVATE
         "/Zc:__cplusplus"
         "/Zc:throwingNew"
-        "/Zc:externConstexpr" )
+        "/Zc:externConstexpr"
+        "/Zc:templateScope"
+        "/utf-8" )
+elseif (CMAKE_CXX_COMPILER_ID MATCHES GNU)
+    target_compile_options(learn-gl PRIVATE
+        "-pedantic"
+        "-Wall"
+        "-Wextra"
+        "-Wno-unused")
+elseif (CMAKE_CXX_COMPILER_ID MATCHES Clang)
+    target_compile_options(learn-gl PRIVATE
+        "-pedantic"
+        "-Wall"
+        "-Wextra"
+        "-Wno-unused")
 endif()
 
 install(TARGETS learn-gl assimp glfw

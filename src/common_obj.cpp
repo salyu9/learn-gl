@@ -6,9 +6,9 @@ using namespace glwrap;
 // ----------- box ---------------
 struct box::box_impl
 {
-    glm::vec4 color_;
     glm::vec3 position_;
     glm::vec3 size_;
+    glm::vec4 color_;
 
     shader_program program_{
         shader::compile_file("shaders/common/box_vs.glsl", shader_type::vertex),

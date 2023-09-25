@@ -107,6 +107,7 @@
 #include <tuple>
 #include <optional>
 #include <format>
+#include <vector>
 #include <span>
 #include <glad/gl.h>
 #include <glm/glm.hpp>
@@ -180,14 +181,15 @@ namespace glwrap
 
     //----------- buffers -------------------
 
-    class buffer_base abstract
+    class buffer_base
     {
     public:
-        virtual ~buffer_base() = 0 {}
+        virtual ~buffer_base() = 0;
     };
+    inline buffer_base::~buffer_base() = default;
 
     template <typename T>
-    class buffer abstract : public buffer_base
+    class buffer : public buffer_base
     {
     public:
         buffer(T const *data, size_t length)
@@ -736,6 +738,16 @@ namespace glwrap
         GLuint handle_{};
     };
 
+    class shader_uniform;
+    namespace details {
+        
+        template <typename T>
+        struct uniform_value_getter
+        {
+            static T get(shader_uniform&);
+        };
+    }
+
     class shader_uniform final
     {
     public:
@@ -868,45 +880,46 @@ namespace glwrap
         }
 
         template <typename T>
-        T get() const = delete;
+        T get() const { return details::uniform_value_getter<T>::get(this); }
 
-        template <>
-        GLfloat get<GLfloat>() const { return get_float(); }
+        // template <>
+        // GLfloat get<GLfloat>() const { return get_float(); }
         void set(GLfloat v) { set_float(v); }
 
-        template <>
-        GLboolean get<GLboolean>() const { return get_bool(); }
+        // template <>
+        // GLboolean get<GLboolean>() const { return get_bool(); }
         void set(GLboolean v) { set_bool(v); }
 
-        template <>
-        GLint get<GLint>() const { return get_int(); }
+        // template <>
+        // GLint get<GLint>() const { return get_int(); }
         void set(GLint v) { set_int(v); }
 
-        template <>
-        GLuint get<GLuint>() const { return get_uint(); }
+        // template <>
+        // GLuint get<GLuint>() const { return get_uint(); }
         void set(GLuint v) { set_uint(v); }
 
-        template <>
-        glm::vec2 get<glm::vec2>() const { return get_vec2(); }
+        // template <>
+        // glm::vec2 get<glm::vec2>() const { return get_vec2(); }
         void set(glm::vec2 const &v) { set_vec2(v); }
 
-        template <>
-        glm::vec3 get<glm::vec3>() const { return get_vec3(); }
+        // template <>
+        // glm::vec3 get<glm::vec3>() const { return get_vec3(); }
         void set(glm::vec3 const &v) { set_vec3(v); }
 
-        template <>
-        glm::vec4 get<glm::vec4>() const { return get_vec4(); }
+        // template <>
+        // glm::vec4 get<glm::vec4>() const { return get_vec4(); }
         void set(glm::vec4 const &v) { set_vec4(v); }
 
-        template <>
-        glm::mat3 get<glm::mat3>() const { return get_mat3(); }
+        // template <>
+        // glm::mat3 get<glm::mat3>() const { return get_mat3(); }
         void set(glm::mat3 const &v) { set_mat3(v); }
 
-        template <>
-        glm::mat4 get<glm::mat4>() const { return get_mat4(); }
+        // template <>
+        // glm::mat4 get<glm::mat4>() const { return get_mat4(); }
         void set(glm::mat4 const &v) { set_mat4(v); }
 
     private:
+
         friend class shader_program;
         shader_uniform(GLuint program_handle, std::string_view name)
             : program_handle_(program_handle),
@@ -1417,11 +1430,11 @@ namespace glwrap
 template <>
 struct std::formatter<glwrap::texture2d_format>
 {
-    constexpr auto parse(std::format_parse_context &ctx)
+    constexpr auto parse(std::format_parse_context &ctx) const
     {
         return ctx.begin();
     }
-    auto format(glwrap::texture2d_format format, std::format_context &ctx)
+    auto format(glwrap::texture2d_format format, std::format_context &ctx) const
     {
         auto &&out = ctx.out();
         switch (format)
@@ -1443,11 +1456,11 @@ struct std::formatter<glwrap::texture2d_format>
 template <>
 struct std::formatter<glwrap::texture2d_elem_type>
 {
-    constexpr auto parse(std::format_parse_context &ctx)
+    constexpr auto parse(std::format_parse_context &ctx) const
     {
         return ctx.begin();
     }
-    auto format(glwrap::texture2d_elem_type format, std::format_context &ctx)
+    auto format(glwrap::texture2d_elem_type format, std::format_context &ctx) const
     {
         auto &&out = ctx.out();
         switch (format)
@@ -1467,11 +1480,11 @@ struct std::formatter<glwrap::texture2d_elem_type>
 template <>
 struct std::formatter<glm::vec1>
 {
-    constexpr auto parse(std::format_parse_context &ctx)
+    constexpr auto parse(std::format_parse_context &ctx) const
     {
         return ctx.begin();
     }
-    auto format(glm::vec1 const &vec, std::format_context &ctx)
+    auto format(glm::vec1 const &vec, std::format_context &ctx) const
     {
         return std::format_to(ctx.out(), "({})", vec.x);
     };

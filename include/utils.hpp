@@ -179,22 +179,22 @@ namespace utils
     struct rotate_by_axis
     {
         rotate_by_axis(float radian, glm::vec3 const axis)
-            : radians{radians}, axis{glm::normalize(axis)}
+            : radians_{radian}, axis_{glm::normalize(axis)}
         { }
         glm::quat to_quat() const
         {
-            auto cos = std::cos(radians);
-            auto sin = std::sin(radians);
-            return glm::quat(cos, sin * axis);
+            auto cos = std::cos(radians_);
+            auto sin = std::sin(radians_);
+            return glm::quat(cos, sin * axis_);
         }
         glm::mat4 to_mat4() const
         {
-            return glm::rotate(glm::mat4(1), radians, axis);
+            return glm::rotate(glm::mat4(1), radians_, axis_);
         }
 
     private:
-        float radians;
-        glm::vec3 axis;
+        float radians_;
+        glm::vec3 axis_;
     };
 
     inline glm::mat4 make_transform(

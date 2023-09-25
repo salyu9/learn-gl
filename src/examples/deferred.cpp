@@ -1,4 +1,5 @@
 #include <random>
+#include <cmath>
 
 #include "examples.hpp"
 #include "glwrap.hpp"
@@ -14,7 +15,7 @@ class deferred final : public example
 public:
     deferred()
     {
-        for (int i = 0; i < lights_.size(); ++i)
+        for (size_t i = 0; i < lights_.size(); ++i)
         {
             auto &light = lights_[i];
             light_uniform_t{g_lighting_program_, i}.set(light);
@@ -416,7 +417,7 @@ private:
         float range;
     };
 
-    static constexpr uint32_t light_count = 32u;
+    static constexpr size_t light_count = 32;
 
     std::vector<light_t> lights_ = []()
     {
@@ -433,7 +434,7 @@ private:
         {
             auto color = utils::hsv(static_cast<int>(rng() * 360.0f), rng() * 0.5f + 0.5f, rng() * 0.5f + 1.5f);
             auto color_max = std::max({color.r, color.g, color.b});
-            auto range = (-linear + std::sqrtf(linear * linear - 4 * quadratic * (constant - (256.0 / 5.0) * color_max))) / (2 * quadratic);
+            auto range = static_cast<float>((-linear + std::sqrt(linear * linear - 4 * quadratic * (constant - (256.0 / 5.0) * color_max))) / (2 * quadratic));
 
             lights.push_back(light_t{
                 .position = glm::vec3(rng() * 8.0 - 4.0, rng() * 7.0 - 4.0, rng() * 8.0 - 4.0),
@@ -452,7 +453,7 @@ private:
         shader_uniform attenuation;
         shader_uniform color;
         shader_uniform range;
-        light_uniform_t(shader_program &p, int index)
+        light_uniform_t(shader_program &p, size_t index)
             : position{p.uniform(std::format("lights[{}].position", index))},
               attenuation{p.uniform(std::format("lights[{}].attenuation", index))},
               color{p.uniform(std::format("lights[{}].color", index))},

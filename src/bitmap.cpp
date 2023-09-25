@@ -37,12 +37,12 @@ struct bitmap::bitmap_impl final
     bitmap_impl &operator=(bitmap_impl const &) = delete;
     bitmap_impl &operator=(bitmap_impl &&) = delete;
 
-    void *ptr_;
-    size_t size_in_bytes_;
     int width_;
     int height_;
     int channels_;
     bitmap_internal_format internal_format_;
+    void *ptr_;
+    size_t size_in_bytes_;
     int max_mipmap_level_{0};
 };
 

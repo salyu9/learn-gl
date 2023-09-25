@@ -19,7 +19,7 @@ enum class bitmap_channel : int
 template <>
 struct std::formatter<bitmap_channel> : std::formatter<std::string>
 {
-    auto format(bitmap_channel channel, std::format_context &ctx)
+    auto format(bitmap_channel channel, std::format_context &ctx) const
     {
         auto &&out = ctx.out();
         switch (channel)
@@ -50,7 +50,7 @@ enum class bitmap_internal_format : int
 template <>
 struct std::formatter<bitmap_internal_format> : std::formatter<std::string>
 {
-    auto format(bitmap_internal_format fmt, std::format_context &ctx)
+    auto format(bitmap_internal_format fmt, std::format_context &ctx) const
     {
         auto &&out = ctx.out();
         switch (fmt)
