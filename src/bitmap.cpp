@@ -13,8 +13,6 @@
 #define STB_IMAGE_IMPLEMENTATION
 #include <stb_image.h>
 
-#include <iostream>
-
 struct bitmap::bitmap_impl final
 {
     bitmap_impl(int width, int height, int channels, bitmap_internal_format internal_format, void *ptr, size_t size_in_bytes)

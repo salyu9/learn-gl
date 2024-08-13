@@ -4,7 +4,6 @@
 #include <string>
 #include <filesystem>
 
-#include "glm/glm.hpp"
 #include "glwrap.hpp"
 
 namespace glwrap
@@ -67,7 +66,7 @@ namespace glwrap
     public:
         mesh(mesh &&) noexcept;
         mesh(mesh const &) = delete;
-        virtual ~mesh();
+        virtual ~mesh() noexcept;
         mesh & operator=(mesh &&other) noexcept;
         mesh & operator=(mesh const &) = delete;
 
@@ -81,7 +80,7 @@ namespace glwrap
     private:
         friend class model;
         mesh();
-        class mesh_impl;
+        struct mesh_impl;
         std::unique_ptr<mesh_impl> impl_;
     };
 
@@ -101,7 +100,7 @@ namespace glwrap
         static mesh create_mesh();
         texture2d &get_texture(uint32_t);
         model();
-        class model_impl;
+        struct model_impl;
         std::unique_ptr<model_impl> impl_;
     };
 }

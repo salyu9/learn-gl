@@ -19,7 +19,7 @@ include(FetchContent)
 FetchContent_Declare(
     glfw
     GIT_REPOSITORY https://github.com/glfw/glfw
-    GIT_TAG 3.3.8
+    GIT_TAG 3.4
 )
 set(GLFW_BUILD_DOCS OFF CACHE INTERNAL "" FORCE)
 set(GLFW_BUILD_TESTS OFF CACHE INTERNAL "" FORCE)
@@ -32,28 +32,29 @@ FetchContent_MakeAvailable(glfw)
 FetchContent_Declare(
     glm
     GIT_REPOSITORY https://github.com/g-truc/glm
-    GIT_TAG 0.9.9.8
+    GIT_TAG 1.0.1
 )
 FetchContent_MakeAvailable(glm)
 
 # -------- assimp --------------
 
-set(ASSIMP_INSTALL OFF CACHE BOOL "" FORCE)
-set(ASSIMP_BUILD_TESTS OFF CACHE BOOL "" FORCE)
 
 FetchContent_Declare(
     assimp
     GIT_REPOSITORY https://github.com/assimp/assimp
-    GIT_TAG v5.2.5
+    GIT_TAG v5.4.2
     GIT_PROGRESS TRUE
 )
+set(ASSIMP_INSTALL OFF CACHE BOOL "" FORCE)
+set(ASSIMP_BUILD_TESTS OFF CACHE BOOL "" FORCE)
+set(ASSIMP_BUILD_ZLIB ON CACHE BOOL "" FORCE)
 FetchContent_MakeAvailable(assimp)
 
 # ------ json --------------
 
 FetchContent_Declare(
     json
-    URL https://github.com/nlohmann/json/releases/download/v3.11.2/json.tar.xz
+    URL https://github.com/nlohmann/json/releases/download/v3.11.3/json.tar.xz
 )
 FetchContent_MakeAvailable(json)
 
@@ -62,7 +63,7 @@ FetchContent_MakeAvailable(json)
 FetchContent_Declare(
     imgui
     GIT_REPOSITORY https://github.com/ocornut/imgui.git
-    GIT_TAG v1.89.4
+    GIT_TAG v1.91.0
     GIT_PROGRESS TRUE
 )
 if (NOT imgui_POPULATED)

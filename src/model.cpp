@@ -1,9 +1,7 @@
-﻿#include <iostream>
-#include <map>
+﻿#include <map>
 #include <vector>
 #include <format>
 #include <cmath>
-#include <span>
 
 #include "assimp/Importer.hpp"
 #include "assimp/scene.h"

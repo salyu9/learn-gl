@@ -227,8 +227,10 @@ namespace utils
         template <size_t N, size_t ...I>
         auto make_uniform_array_impl(glwrap::shader_program & program, std::string const& name, std::index_sequence<I...>)
         {
-            std::string formatter = name + std::string("[{}]");
-            return std::array<glwrap::shader_uniform, N>{program.uniform(std::vformat(formatter, std::make_format_args(I)))...};
+            auto make_uniform_name = [formatter = name + std::string("[{}]")](size_t sz) {
+                return std::vformat(formatter, std::make_format_args(sz));
+            };
+            return std::array<glwrap::shader_uniform, N>{program.uniform(make_uniform_name(I))...};
         }
     }
 

@@ -1,15 +1,13 @@
 #include <iostream>
 #include <cstdlib>
-#include <chrono>
 #include <optional>
-#include <queue>
 #include <format>
 #include <functional>
 
 #include "glad/gl.h"
 #include "GLFW/glfw3.h"
 
-#include "glm/matrix.hpp"
+#define GLM_ENABLE_EXPERIMENTAL
 #include "glm/gtx/transform.hpp"
 
 #include "imgui.h"
@@ -18,9 +16,7 @@
 
 #include "glwrap.hpp"
 #include "camera.hpp"
-#include "model.hpp"
 #include "utils.hpp"
-#include "skybox.hpp"
 #include "examples.hpp"
 
 using namespace glwrap;

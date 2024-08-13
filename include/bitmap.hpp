@@ -1,10 +1,7 @@
 ﻿#pragma once
 
 #include <filesystem>
-#include <utility>
-#include <cstdint>
 #include <format>
-#include <span>
 #include <memory>
 
 enum class bitmap_channel : int
@@ -91,6 +88,6 @@ public:
 
 private:
     bitmap();
-    class bitmap_impl;
+    struct bitmap_impl;
     std::unique_ptr<bitmap_impl> impl_;
 };
